@@ -3,9 +3,7 @@
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { getTimeAgo } from "./utils/time";
-import { type Post } from "./mocks/posts";
-
-import { supabase } from "./utils/client";
+import { getPosts } from "./utils/posts";
 
 function HeartIcon({ filled }: { filled: boolean }) {
   if (filled) {
@@ -57,6 +55,7 @@ function PostCard({
             }
             alt={post.user?.username || "default_user"}
             fill
+            sizes="40px"
             className="object-cover"
           />
         </div>
@@ -76,6 +75,7 @@ function PostCard({
           src={post.image_url}
           alt={`Post de ${post.user?.username || "default_user"}`}
           fill
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           className="object-cover"
         />
       </div>
@@ -127,16 +127,8 @@ export default function Home() {
 
   useEffect(() => {
     const fetchPosts = async () => {
-      const { data, error } = await supabase
-        .from("posts_new")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error al obtener los posts:", error);
-      } else {
-        setPosts(data);
-      }
+      const data = await getPosts();
+      setPosts(data);
     };
 
     fetchPosts();
