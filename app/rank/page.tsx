@@ -60,7 +60,7 @@ function Modal({
         <div className="flex items-center gap-3 p-4 border-b border-border">
           <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-primary">
             <Image
-              src={post.user?.avatar || "https://xynshcnkxdliapebmyaz.supabase.co/storage/v1/object/public/images/posts/unnamed-14.jpg"}
+              src={post.user?.avatar || "https://picsum.photos/40"}
               alt={post.user?.username || "default_user"}
               fill
               sizes="40px"
