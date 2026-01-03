@@ -81,3 +81,33 @@ If images fail to load:
 1.  Check the `image_url` in the database.
 2.  If using external domains (like `example.com`), add them to `next.config.ts`.
 3.  For local testing, use reliable placeholders like `picsum.photos`.
+
+## 7. Database Replication (Backup & Restore)
+
+To move your database schemas and data to another machine, use the `scripts/manage_db.sh` automation script.
+
+### 1. Create a Backup (Current Machine)
+Run this command from the frontend root:
+```bash
+./scripts/manage_db.sh backup
+```
+This generates `supabase_local_backup.sql` containing the full schema and data.
+
+### 2. Prepare the Other Machine
+1.  Ensure **Docker** and **Supabase CLI** are installed.
+2.  Clone the backend repository (`supabase_curso`) and the frontend repository.
+3.  Copy `supabase_local_backup.sql` to the frontend root of the new machine.
+
+### 3. Restore the Database (Other Machine)
+If your backend path differs from the default, set the environment variable first:
+```bash
+# Optional: Only if your path is different
+export SUPABASE_BACKEND_PATH="/your/custom/path/to/supabase_curso"
+
+# Execute the restore
+./scripts/manage_db.sh restore
+```
+
+### 4. Verification
+1.  Check the Supabase Dashboard: [http://127.0.0.1:54323](http://127.0.0.1:54323)
+2.  Update your `.env` file with the new `NEXT_PUBLIC_SUPABASE_ANON_KEY` if the project was reset.
