@@ -72,8 +72,7 @@ Session management utility:
 #### 3. `app/utils/ratings.ts`
 Rating persistence logic:
 - `togglePostLike(postId, sessionId)`: Toggles like status and updates the database
-- `getSessionLikes(postIds, sessionId)`: Gets like status for multiple posts
-- `isPostLikedBySession(postId, sessionId)`: Checks if a single post is liked
+- `getSessionLikes(postIds, sessionId)`: Gets like status for multiple posts (batch operation)
 - `subscribeToPostLikes(onUpdate)`: Subscribes to real-time like count updates
 - `subscribeToSessionRatings(sessionId, onRatingChange)`: Subscribes to session-specific rating changes
 
@@ -82,19 +81,31 @@ Enables Supabase real-time for the rating system:
 - Adds `posts_new` and `post_ratings` tables to the `supabase_realtime` publication
 - Sets `REPLICA IDENTITY FULL` on `post_ratings` to include old values in DELETE events
 
+#### 5. `tests/session.test.ts` & `tests/ratings.test.ts`
+Unit tests for the rating system:
+- Session ID generation and persistence tests
+- Rating toggle functionality tests
+- Batch like status fetching tests
+- Constraint enforcement documentation tests
+
 ### Modified Files
 
-#### 4. `app/utils/posts.ts`
-Added new function:
-- `getPostsWithLikeStatus(sessionId)`: Fetches posts with session-specific like status
+#### `app/utils/posts.ts`
+- Removed unused `getPosts()` function (replaced by `getPostsWithLikeStatus`)
+- Added `getPostsWithLikeStatus(sessionId)`: Fetches posts with session-specific like status
 
-#### 6. `app/page.tsx`
+#### `app/page.tsx`
 Updated homepage component:
 - Added session ID state management
 - Made `handleLike` async with database persistence
 - Added optimistic updates with rollback on failure
 - Added double-click prevention during processing
 - Added real-time subscription for instant like count updates across all clients
+
+#### `app/rank/page.tsx`
+Updated ranking page:
+- Added Post type import (was missing)
+- Added real-time subscription for live ranking updates
 
 ## Database Schema
 
@@ -200,6 +211,60 @@ supabase migration up
 - **Connection Management**: The subscription is cleaned up on component unmount to prevent memory leaks
 - **Offline Handling**: If connection is lost, optimistic updates still work and will sync when reconnected
 - **Bandwidth**: Only changed data is transmitted, not full table refreshes
+
+### Why Session-Based Approach is Still Necessary
+
+Even with real-time updates, the session-based approach is essential because:
+
+1. **Identity**: Sessions identify *who* liked what - without this, we can't enforce "one like per user"
+2. **Real-time**: Real-time broadcasts *what* changed to everyone - it's about synchronization, not identity
+3. **Complementary**: Sessions + Real-time work together - sessions for enforcement, real-time for sync
+
+```
+Session ID → Identifies the user (enforces one like per user)
+Real-time  → Broadcasts changes (syncs all clients)
+```
+
+## Code Cleanup
+
+### Removed Code
+
+The following unused code was removed during cleanup:
+
+1. **`getPosts()` in `app/utils/posts.ts`**: Replaced by `getPostsWithLikeStatus()` which includes session-specific like status
+2. **`isPostLikedBySession()` in `app/utils/ratings.ts`**: Unused single-item check, replaced by batch `getSessionLikes()` for efficiency
+3. **Dead RPC call**: Removed reference to non-existent `decrement_likes` RPC function
+
+### Why These Were Removed
+
+- **Single responsibility**: Each function should have one clear purpose
+- **Efficiency**: Batch operations (`getSessionLikes`) are preferred over single-item queries
+- **Dead code elimination**: Code that isn't used shouldn't exist
+
+## Testing
+
+### Running Tests
+
+```bash
+# Run tests in watch mode
+npm test
+
+# Run tests once
+npm run test:run
+```
+
+### Test Coverage
+
+- **Session tests** (`tests/session.test.ts`):
+  - Session ID generation
+  - Session ID persistence in localStorage
+  - Session clearing functionality
+
+- **Rating tests** (`tests/ratings.test.ts`):
+  - Like toggle behavior
+  - Batch like status fetching
+  - Error handling for missing session
+  - Unique constraint enforcement (conceptual)
 
 ### Future Improvements
 

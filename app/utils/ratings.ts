@@ -59,44 +59,32 @@ export async function togglePostLike(
     }
 
     // Decrement likes count on post
-    const { data: updatedPost, error: updateError } = await supabase
-      .rpc("decrement_likes", { post_id_param: postId });
+    const { data: currentPost } = await supabase
+      .from("posts_new")
+      .select("likes")
+      .eq("id", postId)
+      .single();
+
+    const newLikes = Math.max(0, (currentPost?.likes || 1) - 1);
+
+    const { error: updateError } = await supabase
+      .from("posts_new")
+      .update({ likes: newLikes })
+      .eq("id", postId);
 
     if (updateError) {
-      // Try fallback method if RPC doesn't exist
-      const { data: currentPost } = await supabase
-        .from("posts_new")
-        .select("likes")
-        .eq("id", postId)
-        .single();
-
-      const newLikes = Math.max(0, (currentPost?.likes || 1) - 1);
-
-      const { error: fallbackError } = await supabase
-        .from("posts_new")
-        .update({ likes: newLikes })
-        .eq("id", postId);
-
-      if (fallbackError) {
-        return {
-          success: false,
-          isLiked: false,
-          newLikeCount: 0,
-          error: fallbackError.message,
-        };
-      }
-
       return {
-        success: true,
+        success: false,
         isLiked: false,
-        newLikeCount: newLikes,
+        newLikeCount: 0,
+        error: updateError.message,
       };
     }
 
     return {
       success: true,
       isLiked: false,
-      newLikeCount: updatedPost ?? 0,
+      newLikeCount: newLikes,
     };
   } else {
     // Add like
@@ -190,27 +178,6 @@ export async function getSessionLikes(
   });
 
   return likedMap;
-}
-
-/**
- * Checks if a single post is liked by the session
- */
-export async function isPostLikedBySession(
-  postId: string,
-  sessionId: string
-): Promise<boolean> {
-  if (!sessionId) {
-    return false;
-  }
-
-  const { data } = await supabase
-    .from("post_ratings")
-    .select("id")
-    .eq("post_id", postId)
-    .eq("session_id", sessionId)
-    .single();
-
-  return !!data;
 }
 
 /**
