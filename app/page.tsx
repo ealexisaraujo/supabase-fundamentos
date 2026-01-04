@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { getTimeAgo } from "./utils/time";
 import { getPostsWithLikeStatus } from "./utils/posts";
 import { getSessionId } from "./utils/session";
-import { togglePostLike } from "./utils/ratings";
+import { togglePostLike, subscribeToPostLikes } from "./utils/ratings";
 import type { Post } from "./mocks/posts";
 
 function HeartIcon({ filled }: { filled: boolean }) {
@@ -178,6 +178,23 @@ export default function Home() {
     };
 
     fetchPosts();
+
+    // Subscribe to real-time updates for like counts
+    // This ensures all clients see the same like count instantly
+    const unsubscribe = subscribeToPostLikes((update) => {
+      setPosts((prevPosts) =>
+        prevPosts.map((post) =>
+          post.id === update.postId
+            ? { ...post, likes: update.likes }
+            : post
+        )
+      );
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   return (
