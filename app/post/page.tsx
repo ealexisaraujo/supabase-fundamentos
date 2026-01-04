@@ -38,8 +38,10 @@ export default function CreatePage() {
 
     // 1️⃣ Preparar nombre del archivo
     const fileExt = file.name.split(".").pop();
-    const fileName = `${file.name}-${Date.now()}.${fileExt}`;
-    const filePath = `posts/${fileName}`;
+    const fileName = file.name.substring(0, file.name.lastIndexOf('.'));
+    const sanitizedFileName = fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const finalFileName = `${sanitizedFileName}-${Date.now()}.${fileExt}`;
+    const filePath = `posts/${finalFileName}`;
 
     // 2️⃣ Subir al bucket "images"
     const { data: uploadData, error: uploadError } = await supabase.storage
