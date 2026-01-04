@@ -18,6 +18,37 @@ Since the application doesn't have user authentication, we implemented a session
 2. **One Rating Per Session**: Database constraints enforce that each session can only like a post once
 3. **Toggle Behavior**: Clicking the heart toggles between liked/unliked states
 4. **Optimistic Updates**: UI updates immediately while the database operation happens in the background
+5. **Real-time Sync**: Supabase's pub/sub system broadcasts like count changes to all connected clients
+
+## Technical Decisions
+
+### Why Supabase Real-time with Pub/Sub?
+
+We chose Supabase's real-time features with a pub/sub approach for several reasons:
+
+1. **Atomic Toggling**: The single-row-per-user-item approach combined with a unique constraint ensures atomic like/unlike operations at the database level
+
+2. **Race Condition Prevention**: Database constraints (not application code) enforce the "one like per session" rule, eliminating race conditions that could occur with concurrent requests
+
+3. **Instant UI Updates**: Real-time subscriptions broadcast changes to all connected clients immediately, ensuring consistent like counts across all users viewing the same post
+
+4. **Scalability**: The pub/sub model is efficient for distributed systems as clients subscribe to changes rather than polling
+
+5. **Multi-tab Sync**: Users with multiple tabs open see consistent state across all tabs
+
+### Single Row Per User-Item Pair
+
+Instead of inserting multiple rating rows, we maintain exactly one row per (post_id, session_id) pair:
+
+```sql
+CONSTRAINT unique_session_post_rating UNIQUE (post_id, session_id)
+```
+
+This approach:
+- Simplifies the data model (no need to count rows)
+- Makes "unlike" a simple DELETE operation
+- Prevents duplicate ratings at the database level (most reliable method)
+- Enables efficient queries with proper indexing
 
 ## Files Created/Modified
 
@@ -43,6 +74,13 @@ Rating persistence logic:
 - `togglePostLike(postId, sessionId)`: Toggles like status and updates the database
 - `getSessionLikes(postIds, sessionId)`: Gets like status for multiple posts
 - `isPostLikedBySession(postId, sessionId)`: Checks if a single post is liked
+- `subscribeToPostLikes(onUpdate)`: Subscribes to real-time like count updates
+- `subscribeToSessionRatings(sessionId, onRatingChange)`: Subscribes to session-specific rating changes
+
+#### 4. `supabase/migrations/20260102000005_enable_realtime.sql`
+Enables Supabase real-time for the rating system:
+- Adds `posts_new` and `post_ratings` tables to the `supabase_realtime` publication
+- Sets `REPLICA IDENTITY FULL` on `post_ratings` to include old values in DELETE events
 
 ### Modified Files
 
@@ -50,12 +88,13 @@ Rating persistence logic:
 Added new function:
 - `getPostsWithLikeStatus(sessionId)`: Fetches posts with session-specific like status
 
-#### 5. `app/page.tsx`
+#### 6. `app/page.tsx`
 Updated homepage component:
 - Added session ID state management
 - Made `handleLike` async with database persistence
 - Added optimistic updates with rollback on failure
 - Added double-click prevention during processing
+- Added real-time subscription for instant like count updates across all clients
 
 ## Database Schema
 
@@ -87,6 +126,23 @@ CREATE TABLE public.post_ratings (
 2. Frontend calls `getPostsWithLikeStatus(sessionId)`
 3. Backend fetches posts and queries `post_ratings` for this session
 4. Posts are returned with `isLiked` property set correctly
+5. Frontend subscribes to real-time updates via `subscribeToPostLikes()`
+
+### Real-time Update Flow
+
+When any user likes a post:
+1. The database update triggers a Postgres change event
+2. Supabase broadcasts the change to all subscribed clients
+3. Each client receives the new like count via the subscription callback
+4. The UI updates instantly without needing to refresh or poll
+
+```
+User A likes post → Database UPDATE → Supabase Realtime → All clients receive update
+                                                           ↓
+                                                    User B sees new count
+                                                    User C sees new count
+                                                    User A sees confirmed count
+```
 
 ## Abuse Prevention
 
@@ -118,6 +174,13 @@ supabase migration up
 5. Click again to unlike
 6. Open a new browser/incognito window - it will have a different session and can like independently
 
+### Testing Real-time Updates
+
+1. Open the app in two different browser windows (side by side)
+2. Like a post in one window
+3. Observe the like count update instantly in the other window
+4. This demonstrates the pub/sub real-time synchronization
+
 ## Considerations
 
 ### Session Storage Limitations
@@ -131,9 +194,17 @@ supabase migration up
 - Indexes on `session_id` and `post_id` ensure efficient queries
 - Batch fetching of like status minimizes database round trips
 
+### Real-time Considerations
+
+- **WebSocket Connections**: Each client maintains a WebSocket connection to Supabase for real-time updates
+- **Connection Management**: The subscription is cleaned up on component unmount to prevent memory leaks
+- **Offline Handling**: If connection is lost, optimistic updates still work and will sync when reconnected
+- **Bandwidth**: Only changed data is transmitted, not full table refreshes
+
 ### Future Improvements
 
 If user authentication is added later:
 1. Migrate from session-based to user-based ratings
 2. Add a `user_id` column to `post_ratings`
 3. Link existing session ratings to user accounts if desired
+4. Use Supabase Auth session tokens instead of custom session IDs

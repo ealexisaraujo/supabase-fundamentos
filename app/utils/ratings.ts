@@ -1,10 +1,16 @@
 import { supabase } from "./client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export interface RatingResult {
   success: boolean;
   isLiked: boolean;
   newLikeCount: number;
   error?: string;
+}
+
+export interface PostLikesUpdate {
+  postId: string;
+  likes: number;
 }
 
 /**
@@ -205,4 +211,94 @@ export async function isPostLikedBySession(
     .single();
 
   return !!data;
+}
+
+/**
+ * Subscribes to real-time updates on post likes
+ * Uses Supabase's pub/sub system for instant updates across all clients
+ *
+ * @param onUpdate - Callback when a post's likes count changes
+ * @returns Cleanup function to unsubscribe
+ */
+export function subscribeToPostLikes(
+  onUpdate: (update: PostLikesUpdate) => void
+): () => void {
+  const channel: RealtimeChannel = supabase
+    .channel("posts_likes_updates")
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "posts_new",
+        filter: undefined, // Listen to all post updates
+      },
+      (payload) => {
+        const newRecord = payload.new as { id: string; likes: number };
+        if (newRecord && typeof newRecord.likes === "number") {
+          onUpdate({
+            postId: newRecord.id,
+            likes: newRecord.likes,
+          });
+        }
+      }
+    )
+    .subscribe();
+
+  // Return cleanup function
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+/**
+ * Subscribes to real-time rating changes for a specific session
+ * Notifies when the current session's ratings change (useful for multi-tab sync)
+ *
+ * @param sessionId - The session to track
+ * @param onRatingChange - Callback when a rating is added or removed
+ * @returns Cleanup function to unsubscribe
+ */
+export function subscribeToSessionRatings(
+  sessionId: string,
+  onRatingChange: (postId: string, isLiked: boolean) => void
+): () => void {
+  const channel: RealtimeChannel = supabase
+    .channel(`session_ratings_${sessionId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "post_ratings",
+        filter: `session_id=eq.${sessionId}`,
+      },
+      (payload) => {
+        const newRecord = payload.new as { post_id: string };
+        if (newRecord?.post_id) {
+          onRatingChange(newRecord.post_id, true);
+        }
+      }
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "DELETE",
+        schema: "public",
+        table: "post_ratings",
+        filter: `session_id=eq.${sessionId}`,
+      },
+      (payload) => {
+        const oldRecord = payload.old as { post_id: string };
+        if (oldRecord?.post_id) {
+          onRatingChange(oldRecord.post_id, false);
+        }
+      }
+    )
+    .subscribe();
+
+  // Return cleanup function
+  return () => {
+    supabase.removeChannel(channel);
+  };
 }
