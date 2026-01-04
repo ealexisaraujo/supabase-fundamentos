@@ -3,7 +3,10 @@
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { getTimeAgo } from "./utils/time";
-import { getPosts } from "./utils/posts";
+import { getPostsWithLikeStatus } from "./utils/posts";
+import { getSessionId } from "./utils/session";
+import { togglePostLike } from "./utils/ratings";
+import type { Post } from "./mocks/posts";
 
 function HeartIcon({ filled }: { filled: boolean }) {
   if (filled) {
@@ -108,8 +111,18 @@ function PostCard({
 
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [sessionId, setSessionId] = useState<string>("");
+  const [isLiking, setIsLiking] = useState<Set<string>>(new Set());
 
-  const handleLike = (postId: number | string) => {
+  const handleLike = async (postId: number | string) => {
+    const postIdStr = String(postId);
+
+    // Prevent double-clicking while processing
+    if (isLiking.has(postIdStr)) {
+      return;
+    }
+
+    // Optimistic update for immediate UI feedback
     setPosts((prevPosts) =>
       prevPosts.map((post) =>
         post.id === postId
@@ -121,12 +134,47 @@ export default function Home() {
           : post
       )
     );
+
+    // Mark as processing
+    setIsLiking((prev) => new Set(prev).add(postIdStr));
+
+    // Persist to database
+    const result = await togglePostLike(postIdStr, sessionId);
+
+    // Remove from processing
+    setIsLiking((prev) => {
+      const next = new Set(prev);
+      next.delete(postIdStr);
+      return next;
+    });
+
+    // If failed, revert the optimistic update
+    if (!result.success) {
+      console.error("Failed to toggle like:", result.error);
+      setPosts((prevPosts) =>
+        prevPosts.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                isLiked: !post.isLiked,
+                likes: post.isLiked ? post.likes - 1 : post.likes + 1,
+              }
+            : post
+        )
+      );
+    }
   };
 
   useEffect(() => {
+    // Get or create session ID
+    const sid = getSessionId();
+    setSessionId(sid);
+
     const fetchPosts = async () => {
-      const data = await getPosts();
-      setPosts(data);
+      if (sid) {
+        const data = await getPostsWithLikeStatus(sid);
+        setPosts(data);
+      }
     };
 
     fetchPosts();
