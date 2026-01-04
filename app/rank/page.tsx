@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { getTimeAgo } from "../utils/time";
 import { getRankedPosts } from "../utils/posts";
+import { subscribeToPostLikes } from "../utils/ratings";
+import type { Post } from "../mocks/posts";
 
 function HeartIcon() {
   return (
@@ -114,6 +116,25 @@ export default function RankPage() {
     };
 
     fetchPosts();
+
+    // Subscribe to real-time like updates
+    const unsubscribe = subscribeToPostLikes((update) => {
+      setPosts((prevPosts) =>
+        prevPosts.map((post) =>
+          post.id === update.postId
+            ? { ...post, likes: update.likes }
+            : post
+        )
+      );
+      // Also update selected post if it's the one that changed
+      setSelectedPost((prev) =>
+        prev && prev.id === update.postId
+          ? { ...prev, likes: update.likes }
+          : prev
+      );
+    });
+
+    return () => unsubscribe();
   }, []);
 
   return (
