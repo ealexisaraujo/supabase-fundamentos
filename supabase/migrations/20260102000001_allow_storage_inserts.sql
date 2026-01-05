@@ -1,5 +1,1 @@
-
-CREATE POLICY "Allow anonymous uploads in images_platzi"
-ON storage.objects FOR INSERT
-TO anon
-WITH CHECK ( bucket_id = 'images_platzi' );
+-- This migration has been moved to 20260105224642_create_storage_bucket_and_policies.sql
