@@ -4,6 +4,8 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { getTimeAgo } from "./utils/time";
 import { getPosts } from "./utils/posts";
+import type { Post } from "./mocks/posts";
+import CommentsSection from "./components/CommentsSection";
 
 function HeartIcon({ filled }: { filled: boolean }) {
   if (filled) {
@@ -101,6 +103,9 @@ function PostCard({
           </span>{" "}
           <span className="text-foreground/80">{post.caption}</span>
         </p>
+
+        {/* Comments Section */}
+        <CommentsSection postId={String(post.id)} />
       </div>
     </article>
   );
