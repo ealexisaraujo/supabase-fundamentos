@@ -34,6 +34,10 @@ export interface GetPostsOptions {
   orderBy?: 'created_at' | 'likes';
   /** Sort direction */
   ascending?: boolean;
+  /** Page number (0-based) */
+  page?: number;
+  /** Number of items per page */
+  limit?: number;
 }
 
 /**
@@ -60,7 +64,7 @@ export async function getPostsWithLikeStatus(
   sessionId: string,
   options: GetPostsOptions = {}
 ): Promise<Post[]> {
-  const { minLikes, orderBy = 'created_at', ascending = false } = options;
+  const { minLikes, orderBy = 'created_at', ascending = false, page = 0, limit = 10 } = options;
 
   if (USE_MOCKS) {
     console.log("Using mock data with session likes");
@@ -82,7 +86,10 @@ export async function getPostsWithLikeStatus(
       });
     }
 
-    return result;
+    // Apply pagination for mocks
+    const start = page * limit;
+    const end = start + limit;
+    return result.slice(start, end);
   }
 
   // Build query
@@ -97,6 +104,11 @@ export async function getPostsWithLikeStatus(
 
   // Apply ordering
   query = query.order(orderBy, { ascending });
+
+  // Apply pagination
+  const from = page * limit;
+  const to = from + limit - 1;
+  query = query.range(from, to);
 
   const { data, error } = await query;
 

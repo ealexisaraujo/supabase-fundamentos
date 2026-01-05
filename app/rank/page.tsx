@@ -8,6 +8,11 @@ import { subscribeToPostLikes, togglePostLike } from "../utils/ratings";
 import { getSessionId } from "../utils/session";
 import type { Post } from "../mocks/posts";
 import CommentsSection from "../components/CommentsSection";
+import { RankItemSkeleton } from "../components/Skeletons";
+
+// Base64 gray placeholder for loading images
+const BLUR_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mFrYGb6DwAEsAGzK+3tCAAAAABJRU5ErkJggg==";
 
 function HeartIcon({ filled }: { filled: boolean }) {
   if (filled) {
@@ -89,6 +94,8 @@ function Modal({
               fill
               sizes="40px"
               className="object-cover"
+              placeholder="blur"
+              blurDataURL={BLUR_DATA_URL}
             />
           </div>
           <div className="flex flex-col">
@@ -105,6 +112,8 @@ function Modal({
             fill
             sizes="(max-width: 768px) 100vw, 500px"
             className="object-cover"
+            placeholder="blur"
+            blurDataURL={BLUR_DATA_URL}
           />
         </div>
 
@@ -139,6 +148,7 @@ export default function RankPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [sessionId, setSessionId] = useState<string>("");
   const [isLiking, setIsLiking] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
 
   const handleLike = async (postId: string) => {
     // Prevent double-clicking while processing
@@ -214,13 +224,20 @@ export default function RankPage() {
     setSessionId(sid);
 
     const fetchPosts = async () => {
-      if (sid) {
-        const data = await getPostsWithLikeStatus(sid, {
-          minLikes: 5,
-          orderBy: 'likes',
-          ascending: false
-        });
-        setPosts(data);
+      try {
+        if (sid) {
+          setLoading(true);
+          const data = await getPostsWithLikeStatus(sid, {
+            minLikes: 5,
+            orderBy: 'likes',
+            ascending: false
+          });
+          setPosts(data);
+        }
+      } catch (error) {
+        console.error("Error fetching ranked posts:", error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -260,28 +277,32 @@ export default function RankPage() {
       {/* Grid de posts */}
       <main className="max-w-2xl mx-auto p-2">
         <div className="grid grid-cols-3 gap-1">
-          {[...posts].sort((a, b) => b.likes - a.likes).map((post) => (
-            <button
-              key={post.id}
-              onClick={() => setSelectedPost(post)}
-              className="relative aspect-square overflow-hidden group"
-            >
-              <Image
-                src={post.image_url}
-                alt={`Post con ${post.likes} likes`}
-                fill
-                sizes="(max-width: 768px) 33vw, 20vw"
-                className="object-cover transition-transform group-hover:scale-105"
-              />
-              {/* Overlay con likes al hover */}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                <HeartIcon filled={post.isLiked || false} />
-                <span className="text-white font-semibold">
-                  {post.likes.toLocaleString()}
-                </span>
-              </div>
-            </button>
-          ))}
+          {loading
+            ? Array.from({ length: 9 }).map((_, i) => <RankItemSkeleton key={i} />)
+            : [...posts].sort((a, b) => b.likes - a.likes).map((post) => (
+                <button
+                  key={post.id}
+                  onClick={() => setSelectedPost(post)}
+                  className="relative aspect-square overflow-hidden group"
+                >
+                  <Image
+                    src={post.image_url}
+                    alt={`Post con ${post.likes} likes`}
+                    fill
+                    sizes="(max-width: 768px) 33vw, 20vw"
+                    className="object-cover transition-transform group-hover:scale-105"
+                    placeholder="blur"
+                    blurDataURL={BLUR_DATA_URL}
+                  />
+                  {/* Overlay con likes al hover */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                    <HeartIcon filled={post.isLiked || false} />
+                    <span className="text-white font-semibold">
+                      {post.likes.toLocaleString()}
+                    </span>
+                  </div>
+                </button>
+              ))}
         </div>
       </main>
 
