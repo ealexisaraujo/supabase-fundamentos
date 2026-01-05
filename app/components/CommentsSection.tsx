@@ -9,6 +9,7 @@ import {
   createComment,
 } from "../utils/comments";
 import type { Comment } from "../types/comment";
+import { CommentSkeleton } from "./Skeletons";
 
 function CommentIcon() {
   return (
@@ -178,8 +179,10 @@ export default function CommentsSection({
         <div className="mt-3">
           {/* Comments list */}
           {isLoading ? (
-            <div className="py-4 text-center text-foreground/50">
-              <span className="inline-block animate-pulse">Loading comments...</span>
+            <div className="py-2 space-y-2">
+              <CommentSkeleton />
+              <CommentSkeleton />
+              <CommentSkeleton />
             </div>
           ) : comments.length > 0 ? (
             <div className="max-h-60 overflow-y-auto">

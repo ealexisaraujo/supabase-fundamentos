@@ -1,13 +1,18 @@
 "use client";
 
+import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
-import { useState, useEffect } from "react";
 import { getTimeAgo } from "./utils/time";
 import { getPostsWithLikeStatus } from "./utils/posts";
 import { getSessionId } from "./utils/session";
 import { togglePostLike, subscribeToPostLikes } from "./utils/ratings";
 import type { Post } from "./mocks/posts";
 import CommentsSection from "./components/CommentsSection";
+import { PostCardSkeleton } from "./components/Skeletons";
+
+// Base64 gray placeholder for loading images
+const BLUR_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUErkJggg==";
 
 function HeartIcon({ filled }: { filled: boolean }) {
   if (filled) {
@@ -53,14 +58,13 @@ function PostCard({
       <div className="flex items-center gap-3 p-4">
         <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-primary">
           <Image
-            src={
-              post.user?.avatar ||
-              "https://i.pravatar.cc/40?u=anonymous"
-            }
+            src={post.user?.avatar || "https://i.pravatar.cc/40?u=anonymous"}
             alt={post.user?.username || "Anonymous"}
             fill
             sizes="40px"
             className="object-cover"
+            placeholder="blur"
+            blurDataURL={BLUR_DATA_URL}
           />
         </div>
         <div className="flex flex-col">
@@ -75,10 +79,14 @@ function PostCard({
 
       {/* Imagen del post */}
       <div className="relative w-full aspect-square bg-card-bg">
-        <img
+        <Image
           src={post.image_url}
           alt={`Post de ${post.user?.username || "Anonymous"}`}
+          fill
+          sizes="(max-width: 500px) 100vw, 500px"
           className="object-contain w-full h-full"
+          placeholder="blur"
+          blurDataURL={BLUR_DATA_URL}
         />
       </div>
 
@@ -117,6 +125,12 @@ export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [sessionId, setSessionId] = useState<string>("");
   const [isLiking, setIsLiking] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const observerTarget = useRef<HTMLDivElement>(null);
+  const POSTS_PER_PAGE = 5;
 
   const handleLike = async (postId: number | string) => {
     const postIdStr = String(postId);
@@ -169,22 +183,64 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    // Get or create session ID
-    const sid = getSessionId();
-    setSessionId(sid);
+  const fetchPosts = useCallback(async (pageNum: number, isInitial = false) => {
+    try {
+      const sid = getSessionId();
+      setSessionId(sid);
+      
+      if (!sid) return;
 
-    const fetchPosts = async () => {
-      if (sid) {
-        const data = await getPostsWithLikeStatus(sid);
-        setPosts(data);
+      if (isInitial) setLoading(true);
+      else setLoadingMore(true);
+
+      const data = await getPostsWithLikeStatus(sid, {
+        page: pageNum,
+        limit: POSTS_PER_PAGE,
+      });
+
+      if (data.length < POSTS_PER_PAGE) {
+        setHasMore(false);
+      }
+
+      setPosts((prev) => (isInitial ? data : [...prev, ...data]));
+      setPage(pageNum);
+    } catch (error) {
+      console.error("Error fetching posts:", error);
+    } finally {
+      if (isInitial) setLoading(false);
+      else setLoadingMore(false);
+    }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchPosts(0, true);
+  }, [fetchPosts]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          fetchPosts(page + 1);
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
       }
     };
+  }, [hasMore, loading, loadingMore, page, fetchPosts]);
 
-    fetchPosts();
-
-    // Subscribe to real-time updates for like counts
-    // This ensures all clients see the same like count instantly
+  // Subscribe to real-time updates for like counts
+  useEffect(() => {
     const unsubscribe = subscribeToPostLikes((update) => {
       setPosts((prevPosts) =>
         prevPosts.map((post) =>
@@ -195,7 +251,6 @@ export default function Home() {
       );
     });
 
-    // Cleanup subscription on unmount
     return () => {
       unsubscribe();
     };
@@ -218,6 +273,30 @@ export default function Home() {
           {posts.map((post) => (
             <PostCard key={post.id} post={post} onLike={handleLike} />
           ))}
+
+          {/* Loading state (initial) */}
+          {loading && (
+            <>
+              <PostCardSkeleton />
+              <PostCardSkeleton />
+              <PostCardSkeleton />
+            </>
+          )}
+
+          {/* Infinite scroll trigger and loading more state */}
+          <div ref={observerTarget} className="h-4 w-full" />
+          
+          {loadingMore && (
+            <div className="py-4">
+              <PostCardSkeleton />
+            </div>
+          )}
+          
+          {!hasMore && posts.length > 0 && (
+            <div className="text-center text-foreground/50 py-8">
+              No hay más posts
+            </div>
+          )}
         </div>
       </main>
     </div>
