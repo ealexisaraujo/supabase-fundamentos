@@ -7,6 +7,7 @@ import { getPostsWithLikeStatus } from "./utils/posts";
 import { getSessionId } from "./utils/session";
 import { togglePostLike, subscribeToPostLikes } from "./utils/ratings";
 import type { Post } from "./mocks/posts";
+import CommentsSection from "./components/CommentsSection";
 
 function HeartIcon({ filled }: { filled: boolean }) {
   if (filled) {
@@ -104,6 +105,9 @@ function PostCard({
           </span>{" "}
           <span className="text-foreground/80">{post.caption}</span>
         </p>
+
+        {/* Comments Section */}
+        <CommentsSection postId={String(post.id)} />
       </div>
     </article>
   );
