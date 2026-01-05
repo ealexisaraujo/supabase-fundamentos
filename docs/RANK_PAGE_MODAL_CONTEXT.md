@@ -236,6 +236,44 @@ const userPosts = await getPostsWithLikeStatus(sessionId, {
 
 ---
 
+## Claude Code Hook: Build Verification
+
+A pre-push hook was added to prevent TypeScript errors from reaching Vercel.
+
+**Location**: `.claude/settings.local.json`
+
+**Configuration**:
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git push*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npm run build ... || exit 2",
+            "timeout": 120000
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**How it works**:
+- **Event**: `PreToolUse` - Runs before the Bash tool executes
+- **Matcher**: `Bash(git push*)` - Only triggers on git push commands
+- **Action**: Runs `npm run build` to verify TypeScript compilation
+- **Exit codes**:
+  - `0` = Build passed, push proceeds
+  - `2` = Build failed, push is **blocked**
+
+**Why this matters**: Catches TypeScript errors like `Type 'string | number' is not assignable to type 'string'` before they fail in Vercel's build step.
+
+---
+
 ## Testing Checklist
 
 - [ ] Click post in rank grid opens modal
