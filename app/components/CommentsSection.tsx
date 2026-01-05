@@ -82,14 +82,16 @@ function CommentItem({ comment }: CommentItemProps) {
 interface CommentsSectionProps {
   postId: string;
   initialCommentCount?: number;
+  initiallyExpanded?: boolean;
 }
 
 export default function CommentsSection({
   postId,
   initialCommentCount = 0,
+  initiallyExpanded = false,
 }: CommentsSectionProps) {
   const [comments, setComments] = useState<Comment[]>([]);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(initiallyExpanded);
   const [newComment, setNewComment] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);

@@ -25,19 +25,80 @@ export async function getRankedPosts(): Promise<Post[]> {
 }
 
 /**
+ * Options for fetching posts with like status
+ */
+export interface GetPostsOptions {
+  /** Minimum number of likes to filter by (e.g., 5 for ranked posts) */
+  minLikes?: number;
+  /** Field to order by */
+  orderBy?: 'created_at' | 'likes';
+  /** Sort direction */
+  ascending?: boolean;
+}
+
+/**
  * Fetches posts with session-specific liked status
  * This combines post data with whether the current session has liked each post
+ *
+ * @param sessionId - The session ID to check like status against
+ * @param options - Optional filtering and sorting options
+ * @returns Posts with isLiked status for the session
+ *
+ * @example
+ * // Home page - all posts, newest first (default)
+ * const posts = await getPostsWithLikeStatus(sessionId);
+ *
+ * @example
+ * // Rank page - posts with >5 likes, sorted by likes
+ * const rankedPosts = await getPostsWithLikeStatus(sessionId, {
+ *   minLikes: 5,
+ *   orderBy: 'likes',
+ *   ascending: false
+ * });
  */
-export async function getPostsWithLikeStatus(sessionId: string): Promise<Post[]> {
+export async function getPostsWithLikeStatus(
+  sessionId: string,
+  options: GetPostsOptions = {}
+): Promise<Post[]> {
+  const { minLikes, orderBy = 'created_at', ascending = false } = options;
+
   if (USE_MOCKS) {
     console.log("Using mock data with session likes");
-    return mockPosts;
+    let result = [...mockPosts];
+
+    // Apply minLikes filter for mocks
+    if (minLikes !== undefined) {
+      result = result.filter(post => post.likes > minLikes);
+    }
+
+    // Apply sorting for mocks
+    if (orderBy === 'likes') {
+      result.sort((a, b) => ascending ? a.likes - b.likes : b.likes - a.likes);
+    } else {
+      result.sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return ascending ? dateA - dateB : dateB - dateA;
+      });
+    }
+
+    return result;
   }
 
-  const { data, error } = await supabase
+  // Build query
+  let query = supabase
     .from("posts_new")
-    .select("*")
-    .order("created_at", { ascending: false });
+    .select("*");
+
+  // Apply minLikes filter if specified
+  if (minLikes !== undefined) {
+    query = query.gt("likes", minLikes);
+  }
+
+  // Apply ordering
+  query = query.order(orderBy, { ascending });
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error fetching from Supabase:", error);
