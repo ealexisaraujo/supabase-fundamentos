@@ -22,6 +22,11 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "http",
+        hostname: "::1",
+        port: "54321",
+      },
+      {
+        protocol: "http",
         hostname: "localhost",
         port: "54321",
       },
@@ -40,6 +45,10 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "ui-avatars.com",
+      },
+      {
+        protocol: "https",
+        hostname: "https://lszvsnpptqscsuorhmec.supabase.co",
       }
     ],
   },
