@@ -112,7 +112,7 @@ function Modal({
         <div className="p-4">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onLike(post.id)}
+              onClick={() => onLike(String(post.id))}
               className="hover:scale-110 transition-transform active:scale-95"
               aria-label={post.isLiked ? "Quitar like" : "Dar like"}
             >
@@ -127,7 +127,7 @@ function Modal({
             <span className="text-foreground/80">{post.caption}</span>
           </p>
           {/* Comments section */}
-          <CommentsSection postId={post.id} />
+          <CommentsSection postId={String(post.id)} />
         </div>
       </div>
     </div>
