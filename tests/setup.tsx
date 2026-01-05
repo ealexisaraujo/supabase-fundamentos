@@ -31,3 +31,17 @@ vi.mock("next/image", () => ({
 vi.stubEnv("NEXT_PUBLIC_USE_MOCKS", "true");
 vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://localhost:54321");
 vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "test-anon-key");
+
+// Mock localStorage for session tests
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+Object.defineProperty(window, "localStorage", { value: localStorageMock });
+
+// Mock crypto.randomUUID
+Object.defineProperty(crypto, "randomUUID", {
+  value: () => "test-uuid-1234-5678-9abc-def012345678",
+});
