@@ -65,6 +65,7 @@ function PostCard({
             className="object-cover"
             placeholder="blur"
             blurDataURL={BLUR_DATA_URL}
+            unoptimized
           />
         </div>
         <div className="flex flex-col">
@@ -87,6 +88,7 @@ function PostCard({
           className="object-contain w-full h-full"
           placeholder="blur"
           blurDataURL={BLUR_DATA_URL}
+          unoptimized
         />
       </div>
 
