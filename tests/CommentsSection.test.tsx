@@ -24,6 +24,7 @@ vi.mock("../app/utils/comments", () => ({
       updated_at: new Date(),
     },
   ]),
+  getCommentCount: vi.fn().mockResolvedValue(3),
   createComment: vi.fn().mockResolvedValue({
     id: "new-comment",
     post_id: "post-1",
@@ -191,6 +192,34 @@ describe("CommentsSection", () => {
 
     await waitFor(() => {
       expect(screen.getByText("3 comments")).toBeInTheDocument();
+    });
+  });
+
+  it("fetches and displays accurate comment count on mount", async () => {
+    const { getCommentCount } = await import("../app/utils/comments");
+    vi.mocked(getCommentCount).mockResolvedValueOnce(7);
+
+    render(<CommentsSection postId="post-with-comments" />);
+
+    // Initially shows 0 (default)
+    expect(screen.getByText("0 comments")).toBeInTheDocument();
+
+    // After fetching, should show the actual count
+    await waitFor(() => {
+      expect(screen.getByText("7 comments")).toBeInTheDocument();
+    });
+
+    // Verify getCommentCount was called with correct postId
+    expect(getCommentCount).toHaveBeenCalledWith("post-with-comments");
+  });
+
+  it("calls getCommentCount on mount without user interaction", async () => {
+    const { getCommentCount } = await import("../app/utils/comments");
+
+    render(<CommentsSection postId="test-post" />);
+
+    await waitFor(() => {
+      expect(getCommentCount).toHaveBeenCalledWith("test-post");
     });
   });
 });

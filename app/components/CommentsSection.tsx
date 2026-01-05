@@ -5,6 +5,7 @@ import Image from "next/image";
 import { getTimeAgo } from "../utils/time";
 import {
   getCommentsByPostId,
+  getCommentCount,
   createComment,
 } from "../utils/comments";
 import type { Comment } from "../types/comment";
@@ -94,6 +95,19 @@ export default function CommentsSection({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [commentCount, setCommentCount] = useState(initialCommentCount);
   const hasLoadedRef = useRef(false);
+  const hasLoadedCountRef = useRef(false);
+
+  // Fetch comment count on mount to display accurate initial count
+  useEffect(() => {
+    if (hasLoadedCountRef.current) return;
+    hasLoadedCountRef.current = true;
+
+    const fetchCount = async () => {
+      const count = await getCommentCount(postId);
+      setCommentCount(count);
+    };
+    fetchCount();
+  }, [postId]);
 
   const loadComments = useCallback(async () => {
     setIsLoading(true);
