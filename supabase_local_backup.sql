@@ -538,7 +538,7 @@ SET session_replication_role = replica;
 -- PostgreSQL database dump
 --
 
--- \restrict 7BYvclR0yQLtp1GqPjRQBEHSVhNd1JTdSrpEsMfBQGQDeoG1GZOat42P8AP1p36
+-- \restrict xDiw0GiIURkDgVeDU1f6ItsioGpr1RdN26xYqAy6mkIBaSCh4ak3OQZUe1wfu31
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -674,6 +674,9 @@ SET row_security = off;
 --
 
 INSERT INTO "public"."posts_new" ("id", "user_id", "image_url", "caption", "likes", "created_at", "updated_at", "user") VALUES
+	('976642a2-548b-444d-bc12-ee047f68a116', '11111111-1111-1111-1111-111111111111', 'https://picsum.photos/seed/976642a2-548b-444d-bc12-ee047f68a116/600/600', 'Caminos sin rumbo fijo 🚶‍♂️', 42, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/976642a2-548b-444d-bc12-ee047f68a116?set=set5&bgset=bg1", "username": "user_97664"}'),
+	('bde02ccc-3694-4667-8ee4-493fc0579caa', '22222222-2222-2222-2222-222222222222', 'https://picsum.photos/seed/bde02ccc-3694-4667-8ee4-493fc0579caa/600/600', 'Ciudades que nunca duermen 🌃', 67, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/bde02ccc-3694-4667-8ee4-493fc0579caa?set=set5&bgset=bg1", "username": "user_bde02"}'),
+	('bd43df11-aa6c-4af9-a23b-f16cdd0ffae4', '33333333-3333-3333-3333-333333333333', 'https://picsum.photos/seed/bd43df11-aa6c-4af9-a23b-f16cdd0ffae4/600/600', 'Montañas que tocan el cielo 🗻', 18, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/bd43df11-aa6c-4af9-a23b-f16cdd0ffae4?set=set5&bgset=bg1", "username": "user_bd43d"}'),
 	('f698349e-b6c7-4d78-be5c-c8995624f575', '44444444-4444-4444-4444-444444444444', 'https://picsum.photos/seed/f698349e-b6c7-4d78-be5c-c8995624f575/600/600', 'Ríos de aventura 🌊', 89, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/f698349e-b6c7-4d78-be5c-c8995624f575?set=set5&bgset=bg1", "username": "user_f6983"}'),
 	('9479f550-9aa3-4ae1-b09d-8f7b4952674f', '55555555-5555-5555-5555-555555555555', 'https://picsum.photos/seed/9479f550-9aa3-4ae1-b09d-8f7b4952674f/600/600', 'Desiertos infinitos 🏜️', 31, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/9479f550-9aa3-4ae1-b09d-8f7b4952674f?set=set5&bgset=bg1", "username": "user_9479f"}'),
 	('f4ba80c2-399d-4c4e-994f-235b501030d2', '66666666-6666-6666-6666-666666666666', 'https://picsum.photos/seed/f4ba80c2-399d-4c4e-994f-235b501030d2/600/600', 'Selvas llenas de vida 🌴', 55, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/f4ba80c2-399d-4c4e-994f-235b501030d2?set=set5&bgset=bg1", "username": "user_f4ba8"}'),
@@ -681,9 +684,7 @@ INSERT INTO "public"."posts_new" ("id", "user_id", "image_url", "caption", "like
 	('9ef31c07-ec1c-4f23-a509-8551babc471c', '88888888-8888-8888-8888-888888888888', 'https://picsum.photos/seed/9ef31c07-ec1c-4f23-a509-8551babc471c/600/600', 'Islas perdidas 🏝️', 27, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/9ef31c07-ec1c-4f23-a509-8551babc471c?set=set5&bgset=bg1", "username": "user_9ef31"}'),
 	('430a6097-deb2-4bcf-8d7b-622db3b0a81a', '99999999-9999-9999-9999-999999999999', 'https://picsum.photos/seed/430a6097-deb2-4bcf-8d7b-622db3b0a81a/600/600', 'Caminos rurales 🛤️', 94, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/430a6097-deb2-4bcf-8d7b-622db3b0a81a?set=set5&bgset=bg1", "username": "user_430a6"}'),
 	('c8905c8e-1bc4-4cde-845e-7b1bf8c79504', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'https://picsum.photos/seed/c8905c8e-1bc4-4cde-845e-7b1bf8c79504/600/600', 'Metrópolis vibrantes 🏙️', 38, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/c8905c8e-1bc4-4cde-845e-7b1bf8c79504?set=set5&bgset=bg1", "username": "user_c8905"}'),
-	('976642a2-548b-444d-bc12-ee047f68a116', '11111111-1111-1111-1111-111111111111', 'https://picsum.photos/seed/976642a2-548b-444d-bc12-ee047f68a116/600/600', 'Caminos sin rumbo fijo 🚶‍♂️', 43, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/976642a2-548b-444d-bc12-ee047f68a116?set=set5&bgset=bg1", "username": "user_97664"}'),
-	('bde02ccc-3694-4667-8ee4-493fc0579caa', '22222222-2222-2222-2222-222222222222', 'https://picsum.photos/seed/bde02ccc-3694-4667-8ee4-493fc0579caa/600/600', 'Ciudades que nunca duermen 🌃', 68, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/bde02ccc-3694-4667-8ee4-493fc0579caa?set=set5&bgset=bg1", "username": "user_bde02"}'),
-	('bd43df11-aa6c-4af9-a23b-f16cdd0ffae4', '33333333-3333-3333-3333-333333333333', 'https://picsum.photos/seed/bd43df11-aa6c-4af9-a23b-f16cdd0ffae4/600/600', 'Montañas que tocan el cielo 🗻', 19, '2025-12-27 05:51:12.9961+00', '2025-12-27 05:51:12.9961+00', '{"avatar": "https://robohash.org/bd43df11-aa6c-4af9-a23b-f16cdd0ffae4?set=set5&bgset=bg1", "username": "user_bd43d"}');
+	('8adefcb3-87a1-439a-a177-2b0174a42884', NULL, 'http://localhost:54321/storage/v1/object/public/images_platzi/posts/alex_araujo_perfil-1767652149208.jpg', 'yoyoy', 0, '2026-01-05 22:29:09.275141+00', '2026-01-05 22:29:09.275141+00', NULL);
 
 
 --
@@ -691,6 +692,10 @@ INSERT INTO "public"."posts_new" ("id", "user_id", "image_url", "caption", "like
 --
 
 INSERT INTO "public"."comments" ("id", "post_id", "user_id", "content", "user", "created_at", "updated_at") VALUES
+	('4164350c-3ba8-484c-a6ca-69202be554e3', '976642a2-548b-444d-bc12-ee047f68a116', NULL, 'Qué buena foto!', '{"avatar": "https://i.pravatar.cc/150?img=1", "username": "juan_perez"}', '2026-01-05 22:26:05.902718+00', '2026-01-05 22:26:05.902718+00'),
+	('5c344045-2932-48e5-a2d3-14d3509c8d34', '976642a2-548b-444d-bc12-ee047f68a116', NULL, 'Me encanta el lugar', '{"avatar": "https://i.pravatar.cc/150?img=2", "username": "maria_garcia"}', '2026-01-05 22:26:05.902718+00', '2026-01-05 22:26:05.902718+00'),
+	('58d87279-60f7-42e6-b9ef-b8c9984a3181', 'bde02ccc-3694-4667-8ee4-493fc0579caa', NULL, 'Increíble vista!', '{"avatar": "https://i.pravatar.cc/150?img=3", "username": "carlos_ruiz"}', '2026-01-05 22:26:05.902718+00', '2026-01-05 22:26:05.902718+00'),
+	('4b419935-2250-4293-a61c-7d653f138ca8', 'f698349e-b6c7-4d78-be5c-c8995624f575', NULL, 'Wow, qué aventura!', '{"avatar": "https://i.pravatar.cc/150?img=4", "username": "ana_luz"}', '2026-01-05 22:26:05.902718+00', '2026-01-05 22:26:05.902718+00'),
 	('376a7d98-c191-4157-9cc3-2d5a96b6e712', '976642a2-548b-444d-bc12-ee047f68a116', NULL, 'Qué buena foto!', '{"avatar": "https://i.pravatar.cc/150?img=1", "username": "juan_perez"}', '2026-01-05 03:05:30.585337+00', '2026-01-05 03:05:30.585337+00'),
 	('1d551292-f040-4e35-8592-6b11f35d9dae', '976642a2-548b-444d-bc12-ee047f68a116', NULL, 'Me encanta el lugar', '{"avatar": "https://i.pravatar.cc/150?img=2", "username": "maria_garcia"}', '2026-01-05 03:05:30.585337+00', '2026-01-05 03:05:30.585337+00'),
 	('44ca9052-f656-403d-8b02-6b701243e480', 'bde02ccc-3694-4667-8ee4-493fc0579caa', NULL, 'Increíble vista!', '{"avatar": "https://i.pravatar.cc/150?img=3", "username": "carlos_ruiz"}', '2026-01-05 03:05:30.585337+00', '2026-01-05 03:05:30.585337+00'),
@@ -712,6 +717,8 @@ INSERT INTO "public"."post_ratings" ("id", "post_id", "session_id", "created_at"
 -- Data for Name: buckets; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
 --
 
+INSERT INTO "storage"."buckets" ("id", "name", "owner", "created_at", "updated_at", "public", "avif_autodetection", "file_size_limit", "allowed_mime_types", "owner_id", "type") VALUES
+	('images_platzi', 'images_platzi', NULL, '2026-01-05 22:27:39.320003+00', '2026-01-05 22:27:39.320003+00', true, false, NULL, NULL, NULL, 'STANDARD');
 
 
 --
@@ -742,12 +749,16 @@ INSERT INTO "public"."post_ratings" ("id", "post_id", "session_id", "created_at"
 -- Data for Name: objects; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
 --
 
+INSERT INTO "storage"."objects" ("id", "bucket_id", "name", "owner", "created_at", "updated_at", "last_accessed_at", "metadata", "version", "owner_id", "user_metadata", "level") VALUES
+	('5c730929-b529-4e47-8a48-b09eb9405bf7', 'images_platzi', 'posts/alex_araujo_perfil-1767652149208.jpg', NULL, '2026-01-05 22:29:09.249857+00', '2026-01-05 22:29:09.249857+00', '2026-01-05 22:29:09.249857+00', '{"eTag": "\"a688a2119b59834733db7e64cf4c947e\"", "size": 151312, "mimetype": "image/jpeg", "cacheControl": "max-age=3600", "lastModified": "2026-01-05T22:29:09.242Z", "contentLength": 151312, "httpStatusCode": 200}', 'bfd29a80-bfa1-438f-af0e-e6d74fee2292', NULL, '{}', 2);
 
 
 --
 -- Data for Name: prefixes; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
 --
 
+INSERT INTO "storage"."prefixes" ("bucket_id", "name", "created_at", "updated_at") VALUES
+	('images_platzi', 'posts', '2026-01-05 22:29:09.249857+00', '2026-01-05 22:29:09.249857+00');
 
 
 --
@@ -792,6 +803,6 @@ SELECT pg_catalog.setval('"supabase_functions"."hooks_id_seq"', 1, false);
 -- PostgreSQL database dump complete
 --
 
--- \unrestrict 7BYvclR0yQLtp1GqPjRQBEHSVhNd1JTdSrpEsMfBQGQDeoG1GZOat42P8AP1p36
+-- \unrestrict xDiw0GiIURkDgVeDU1f6ItsioGpr1RdN26xYqAy6mkIBaSCh4ak3OQZUe1wfu31
 
 RESET ALL;
