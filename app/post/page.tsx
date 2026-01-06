@@ -3,13 +3,18 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { supabase } from "../utils/client";
+import { CloseIcon } from "../components/icons";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 export default function CreatePage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,18 +38,15 @@ export default function CreatePage() {
   };
 
   const uploadAndCreatePost = async (file: File) => {
-
-
-
     // 1️⃣ Preparar nombre del archivo
     const fileExt = file.name.split(".").pop();
-    const fileName = file.name.substring(0, file.name.lastIndexOf('.'));
-    const sanitizedFileName = fileName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const fileName = file.name.substring(0, file.name.lastIndexOf("."));
+    const sanitizedFileName = fileName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
     const finalFileName = `${sanitizedFileName}-${Date.now()}.${fileExt}`;
     const filePath = `posts/${finalFileName}`;
 
     // 2️⃣ Subir al bucket "images"
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from("images_platzi")
       .upload(filePath, file, {
         cacheControl: "3600",
@@ -121,16 +123,16 @@ export default function CreatePage() {
     }
   };
 
-
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card-bg border-b border-border">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-center">
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="w-10" /> {/* Spacer for centering */}
           <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Crear Post
           </h1>
+          <ThemeToggle />
         </div>
       </header>
 
@@ -153,20 +155,7 @@ export default function CreatePage() {
                   className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
                   aria-label="Eliminar imagen"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
+                  <CloseIcon />
                 </button>
               </div>
             ) : (
@@ -200,7 +189,7 @@ export default function CreatePage() {
                 </span>
               </label>
             )}
-            
+
             <input
               ref={fileInputRef}
               id="image-upload"

@@ -79,3 +79,10 @@ Run a single test file:
 ```bash
 npx vitest run tests/comments.test.ts
 ```
+
+## Active Technologies
+- TypeScript 5.x with React 19 / Next.js 16 + Next.js 16.1.1, React 19.2.0, Tailwind CSS v4, @supabase/supabase-js (001-tailwind-ui-refactor)
+- Supabase (PostgreSQL) for posts, ratings, comments; Supabase Storage for images (001-tailwind-ui-refactor)
+
+## Recent Changes
+- 001-tailwind-ui-refactor: Added TypeScript 5.x with React 19 / Next.js 16 + Next.js 16.1.1, React 19.2.0, Tailwind CSS v4, @supabase/supabase-js
