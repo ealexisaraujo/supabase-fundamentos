@@ -1,6 +1,6 @@
 export function Skeleton({ className }: { className?: string }) {
   return (
-    <div className={`animate-pulse bg-gray-200/20 rounded-md ${className}`} />
+    <div className={`animate-pulse bg-border/50 rounded-md ${className}`} />
   );
 }
 
@@ -23,10 +23,15 @@ export function PostCardSkeleton() {
 
       {/* Actions */}
       <div className="p-4 flex flex-col gap-3">
-        <div className="flex items-center gap-2">
+        {/* Action buttons */}
+        <div className="flex items-center gap-4">
           <Skeleton className="w-7 h-7 rounded-full" />
-          <Skeleton className="w-20 h-4" />
+          <Skeleton className="w-7 h-7 rounded-full" />
+          <Skeleton className="w-7 h-7 rounded-full" />
         </div>
+        {/* Likes count */}
+        <Skeleton className="w-20 h-4" />
+        {/* Caption */}
         <div className="flex flex-col gap-1">
           <Skeleton className="w-full h-4" />
           <Skeleton className="w-2/3 h-4" />
