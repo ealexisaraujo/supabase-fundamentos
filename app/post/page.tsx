@@ -2,12 +2,14 @@
 
 import { useState, useRef } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { supabase } from "../utils/client";
 import { CloseIcon } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { revalidatePostsCache } from "../actions/revalidate-posts";
 
 export default function CreatePage() {
+  const router = useRouter();
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
@@ -106,19 +108,21 @@ export default function CreatePage() {
     try {
       await uploadAndCreatePost(imageFile);
 
-      // Invalidate cache so the new post appears in the feed immediately
-      revalidatePostsCache().catch((err) => {
-        console.error("[CreatePost] Error revalidating cache:", err);
-      });
+      // Invalidate server-side cache
+      await revalidatePostsCache();
 
-      // Éxito
-      setMessage({ type: "success", text: "¡Post creado exitosamente!" });
+      // Reset form state
       setImageFile(null);
       setImagePreview(null);
       setCaption("");
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
+
+      // Redirect to home with router.refresh() to bypass client-side Router Cache
+      // This ensures the new post appears immediately
+      router.push("/");
+      router.refresh();
     } catch (error) {
       setMessage({
         type: "error",

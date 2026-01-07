@@ -283,12 +283,13 @@ Added cache invalidation after successful like/unlike:
 Added `@supabase/ssr` dependency for server-side Supabase client capabilities.
 
 #### `app/post/page.tsx`
-Added cache invalidation after successful post creation:
+Added cache invalidation and automatic redirect after successful post creation:
 - Imports `revalidatePostsCache` server action
-- Calls `revalidatePostsCache()` after `uploadAndCreatePost()` succeeds
-- Uses fire-and-forget pattern (`.catch()`) to avoid blocking the success flow
+- Imports `useRouter` from `next/navigation`
+- Awaits `revalidatePostsCache()` to invalidate server-side cache
+- Uses `router.push("/")` + `router.refresh()` to redirect user and bypass client-side Router Cache
 
-**Bug Fixed:** New posts now appear immediately in the feed instead of waiting for cache expiration (up to 60 seconds on home, 5 minutes on ranking).
+**Bug Fixed:** New posts now appear immediately in the feed. User is automatically redirected to home after creating a post.
 
 #### `CLAUDE.md`
 Updated documentation to reflect new architecture.
@@ -333,12 +334,19 @@ Updated documentation to reflect new architecture.
    ├── Image uploaded to Supabase Storage
    ├── Post inserted into posts_new table
    └── Result returned to client
-4. revalidatePostsCache() called (async, non-blocking)
-5. Cache invalidated → next page visit fetches fresh data
-6. Success message shown to user
+4. revalidatePostsCache() called (awaited)
+5. Server-side cache invalidated
+6. router.push("/") + router.refresh() called
+   ├── Navigates user to home page
+   └── Bypasses client-side Router Cache
+7. User sees their new post immediately
 ```
 
-**Important:** Without cache invalidation after post creation, new posts would only appear after the cache expires (60 seconds for home, 5 minutes for ranking). The `revalidatePostsCache()` call ensures the new post appears immediately on the next page visit.
+**Important:** Next.js has two caching layers:
+1. **Server-side Data Cache** - Invalidated via `revalidateTag()`
+2. **Client-side Router Cache** - Caches RSC payloads for 30 seconds
+
+Using `router.refresh()` after `router.push()` ensures both caches are bypassed, so the new post appears immediately.
 
 ### Cache Revalidation Flow
 
@@ -532,28 +540,38 @@ For truly real-time data (like live comments), caching may not be appropriate. C
 
 ### Issue: New posts don't appear immediately in the feed
 
-**Symptom:** After creating a new post, navigating to the home feed would show the old cached posts. The new post only appeared after waiting 60+ seconds (cache expiration).
+**Symptom:** After creating a new post, navigating to the home feed would show the old cached posts. The new post only appeared after waiting 60+ seconds (cache expiration) or doing a hard refresh.
 
-**Root Cause:** The post creation flow in `app/post/page.tsx` was inserting posts into the database but not invalidating the Next.js cache. The cache was only being invalidated after like/unlike operations.
+**Root Cause:** Two caching layers were involved:
+1. **Server-side Data Cache** - Not being invalidated after post creation
+2. **Client-side Router Cache** - Next.js caches RSC payloads for 30 seconds during client-side navigation
 
-**Fix:** Added `revalidatePostsCache()` call after successful post creation:
+Even after adding `revalidateTag()`, client-side navigation via `next/link` would still serve cached data from the Router Cache.
+
+**Fix:** Updated post creation flow to handle both cache layers:
 
 ```typescript
 // In app/post/page.tsx
 try {
   await uploadAndCreatePost(imageFile);
 
-  // Invalidate cache so the new post appears in the feed immediately
-  revalidatePostsCache().catch((err) => {
-    console.error("[CreatePost] Error revalidating cache:", err);
-  });
+  // Invalidate server-side cache
+  await revalidatePostsCache();
 
-  setMessage({ type: "success", text: "¡Post creado exitosamente!" });
+  // Reset form state
+  setImageFile(null);
+  setImagePreview(null);
+  setCaption("");
+
+  // Redirect to home with router.refresh() to bypass client-side Router Cache
+  router.push("/");
+  router.refresh();
+} catch (error) {
   // ...
 }
 ```
 
-**Result:** New posts now appear immediately in the feed after creation.
+**Result:** After creating a post, user is automatically redirected to home and sees their new post immediately.
 
 ## Future Improvements
 
