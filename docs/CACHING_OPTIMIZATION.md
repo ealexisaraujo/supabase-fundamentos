@@ -283,13 +283,18 @@ Added cache invalidation after successful like/unlike:
 Added `@supabase/ssr` dependency for server-side Supabase client capabilities.
 
 #### `app/post/page.tsx`
-Added cache invalidation and automatic redirect after successful post creation:
+Added cache invalidation and hard navigation after successful post creation:
 - Imports `revalidatePostsCache` server action
-- Imports `useRouter` from `next/navigation`
-- Awaits `revalidatePostsCache()` to invalidate server-side cache
-- Uses `router.push("/")` + `router.refresh()` to redirect user and bypass client-side Router Cache
+- Awaits `revalidatePostsCache()` to invalidate both Data Cache and Router Cache
+- Uses `window.location.href = "/"` for hard navigation (full page reload)
 
-**Bug Fixed:** New posts now appear immediately in the feed. User is automatically redirected to home after creating a post.
+**Bug Fixed:** New posts now appear immediately in the feed. Hard navigation guarantees fresh data by bypassing all client-side caching.
+
+#### `app/actions/revalidate-posts.ts`
+Updated to use proper Next.js 16 cache invalidation:
+- Uses `revalidateTag()` with cache profile to invalidate Data Cache
+- Uses `revalidatePath('/')` and `revalidatePath('/rank')` to purge Router Cache
+- Both cache layers are invalidated for reliable cache busting
 
 #### `CLAUDE.md`
 Updated documentation to reflect new architecture.
@@ -335,18 +340,22 @@ Updated documentation to reflect new architecture.
    ├── Post inserted into posts_new table
    └── Result returned to client
 4. revalidatePostsCache() called (awaited)
-5. Server-side cache invalidated
-6. router.push("/") + router.refresh() called
-   ├── Navigates user to home page
-   └── Bypasses client-side Router Cache
-7. User sees their new post immediately
+   ├── revalidateTag('posts') - invalidates Data Cache
+   ├── revalidatePath('/') - purges Router Cache for home
+   └── revalidatePath('/rank') - purges Router Cache for rank
+5. window.location.href = "/" (hard navigation)
+   └── Full page reload bypasses all client-side caching
+6. User sees their new post immediately
 ```
 
-**Important:** Next.js has two caching layers:
-1. **Server-side Data Cache** - Invalidated via `revalidateTag()`
-2. **Client-side Router Cache** - Caches RSC payloads for 30 seconds
+**Next.js 16 Caching Architecture:**
 
-Using `router.refresh()` after `router.push()` ensures both caches are bypassed, so the new post appears immediately.
+| Cache Layer | Location | Invalidation Method |
+|-------------|----------|---------------------|
+| Data Cache | Server | `revalidateTag()` marks data stale |
+| Router Cache | Client | `revalidatePath()` purges cached RSC payloads |
+
+**Why hard navigation?** Client-side navigation with `router.push()` may still serve stale data from the Router Cache even after calling `revalidatePath()` in the Server Action, due to timing issues. A hard navigation (`window.location.href`) bypasses all client-side caching and guarantees fresh data.
 
 ### Cache Revalidation Flow
 
@@ -548,30 +557,37 @@ For truly real-time data (like live comments), caching may not be appropriate. C
 
 Even after adding `revalidateTag()`, client-side navigation via `next/link` would still serve cached data from the Router Cache.
 
-**Fix:** Updated post creation flow to handle both cache layers:
+**Fix:** Updated post creation flow with proper Next.js 16 cache invalidation:
+
+```typescript
+// In app/actions/revalidate-posts.ts
+export async function revalidatePostsCache() {
+  // Invalidate Data Cache
+  revalidateTag(CACHE_TAGS.POSTS, "default");
+  revalidateTag(CACHE_TAGS.HOME_POSTS, "default");
+
+  // Purge Router Cache for affected pages
+  revalidatePath("/");
+  revalidatePath("/rank");
+}
+```
 
 ```typescript
 // In app/post/page.tsx
 try {
   await uploadAndCreatePost(imageFile);
 
-  // Invalidate server-side cache
+  // Invalidate both Data Cache and Router Cache
   await revalidatePostsCache();
 
-  // Reset form state
-  setImageFile(null);
-  setImagePreview(null);
-  setCaption("");
-
-  // Redirect to home with router.refresh() to bypass client-side Router Cache
-  router.push("/");
-  router.refresh();
+  // Hard navigation bypasses all client-side caching
+  window.location.href = "/";
 } catch (error) {
   // ...
 }
 ```
 
-**Result:** After creating a post, user is automatically redirected to home and sees their new post immediately.
+**Result:** After creating a post, user is redirected to home with a full page reload and sees their new post immediately.
 
 ## Future Improvements
 
