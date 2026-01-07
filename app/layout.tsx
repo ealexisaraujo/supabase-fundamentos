@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     description: "App inspirada en Instagram para el Curso de Supabase de Platzi. Comparte fotos, likes y comentarios en tiempo real.",
     images: [
       {
-        url: "/opengraph-image",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "Suplatzigram - Curso de Supabase de Platzi",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Suplatzigram - Aprende Supabase con Platzi",
     description: "App inspirada en Instagram para el Curso de Supabase de Platzi. Comparte fotos, likes y comentarios en tiempo real.",
-    images: ["/opengraph-image"],
+    images: ["/og-image.png"],
     creator: "@platzi",
   },
   robots: {
