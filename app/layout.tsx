@@ -14,9 +14,39 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://suplatzigram.vercel.app";
+
 export const metadata: Metadata = {
   title: "Suplatzigram",
-  description: "App inspirada en Instagram - Curso de Supabase de Platzi",
+  description: "App inspirada en Instagram - Curso de Supabase de Platzi. Aprende a construir aplicaciones con Supabase, autenticación, base de datos en tiempo real y almacenamiento.",
+  metadataBase: new URL(siteUrl),
+  openGraph: {
+    type: "website",
+    locale: "es_ES",
+    url: siteUrl,
+    siteName: "Suplatzigram",
+    title: "Suplatzigram - Aprende Supabase con Platzi",
+    description: "App inspirada en Instagram para el Curso de Supabase de Platzi. Comparte fotos, likes y comentarios en tiempo real.",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Suplatzigram - Curso de Supabase de Platzi",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Suplatzigram - Aprende Supabase con Platzi",
+    description: "App inspirada en Instagram para el Curso de Supabase de Platzi. Comparte fotos, likes y comentarios en tiempo real.",
+    images: ["/opengraph-image"],
+    creator: "@platzi",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({
