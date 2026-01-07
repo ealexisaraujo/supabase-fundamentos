@@ -7,6 +7,11 @@ import { HomeIcon, PlusIcon, RankIcon } from "./icons";
 export default function BottomNav() {
   const pathname = usePathname();
 
+  // Hide navigation on auth pages
+  if (pathname?.startsWith("/auth")) {
+    return null;
+  }
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card-bg border-t border-border">
       <div className="max-w-lg mx-auto flex items-center justify-around py-2">
