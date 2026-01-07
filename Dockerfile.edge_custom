@@ -1,0 +1,11 @@
+FROM public.ecr.aws/supabase/edge-runtime:v1.69.28
+
+USER root
+
+# Copy the combined CA bundle (Mozilla CAs + Corporate CAs)
+COPY supabase/functions/combined_ca_bundle.pem /etc/ssl/certs/ca-certificates.crt
+
+# Set environment variables for Deno SSL verification
+ENV DENO_CERT=/etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
