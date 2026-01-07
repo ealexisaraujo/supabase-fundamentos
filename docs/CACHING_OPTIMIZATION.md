@@ -282,6 +282,14 @@ Added cache invalidation after successful like/unlike:
 #### `package.json`
 Added `@supabase/ssr` dependency for server-side Supabase client capabilities.
 
+#### `app/post/page.tsx`
+Added cache invalidation after successful post creation:
+- Imports `revalidatePostsCache` server action
+- Calls `revalidatePostsCache()` after `uploadAndCreatePost()` succeeds
+- Uses fire-and-forget pattern (`.catch()`) to avoid blocking the success flow
+
+**Bug Fixed:** New posts now appear immediately in the feed instead of waiting for cache expiration (up to 60 seconds on home, 5 minutes on ranking).
+
 #### `CLAUDE.md`
 Updated documentation to reflect new architecture.
 
@@ -315,6 +323,22 @@ Updated documentation to reflect new architecture.
 4. Real-time broadcast to all connected clients
 5. All clients update their like counts
 ```
+
+### Post Creation Flow
+
+```
+1. User fills out post form (image + caption)
+2. User clicks "Publicar" button
+3. uploadAndCreatePost() called
+   ├── Image uploaded to Supabase Storage
+   ├── Post inserted into posts_new table
+   └── Result returned to client
+4. revalidatePostsCache() called (async, non-blocking)
+5. Cache invalidated → next page visit fetches fresh data
+6. Success message shown to user
+```
+
+**Important:** Without cache invalidation after post creation, new posts would only appear after the cache expires (60 seconds for home, 5 minutes for ranking). The `revalidatePostsCache()` call ensures the new post appears immediately on the next page visit.
 
 ### Cache Revalidation Flow
 
@@ -503,6 +527,33 @@ For truly real-time data (like live comments), caching may not be appropriate. C
 - Shorter cache durations
 - WebSocket subscriptions
 - Polling for critical real-time data
+
+## Known Issues and Fixes
+
+### Issue: New posts don't appear immediately in the feed
+
+**Symptom:** After creating a new post, navigating to the home feed would show the old cached posts. The new post only appeared after waiting 60+ seconds (cache expiration).
+
+**Root Cause:** The post creation flow in `app/post/page.tsx` was inserting posts into the database but not invalidating the Next.js cache. The cache was only being invalidated after like/unlike operations.
+
+**Fix:** Added `revalidatePostsCache()` call after successful post creation:
+
+```typescript
+// In app/post/page.tsx
+try {
+  await uploadAndCreatePost(imageFile);
+
+  // Invalidate cache so the new post appears in the feed immediately
+  revalidatePostsCache().catch((err) => {
+    console.error("[CreatePost] Error revalidating cache:", err);
+  });
+
+  setMessage({ type: "success", text: "¡Post creado exitosamente!" });
+  // ...
+}
+```
+
+**Result:** New posts now appear immediately in the feed after creation.
 
 ## Future Improvements
 
