@@ -34,19 +34,35 @@ npm run lint         # Run ESLint
 - **Testing:** Vitest + React Testing Library
 
 ### App Structure (`app/`)
-- `page.tsx` - Home feed with posts, likes, and comments
+- `page.tsx` - Home feed Server Component (fetches cached posts)
 - `post/page.tsx` - Create new post page
-- `rank/page.tsx` - Posts ranked by likes (>5 likes threshold)
-- `components/` - Reusable UI components (BottomNav, CommentsSection)
+- `rank/page.tsx` - Ranking page Server Component (fetches cached ranked posts)
+- `actions/` - Server Actions for cache revalidation
+- `components/` - Reusable UI components (BottomNav, CommentsSection, HomeFeed, RankGrid)
 - `utils/` - Supabase client and data fetching utilities
+- `utils/supabase/` - Server-side Supabase client utilities
 - `mocks/` - Mock data for testing and fallback
 - `types/` - TypeScript type definitions
 
 ### Supabase Integration
-- **Client:** `app/utils/client.ts` - Single Supabase client instance
+- **Client (browser):** `app/utils/client.ts` - Single Supabase client instance for client components
+- **Client (server):** `app/utils/supabase/server.ts` - SSR-compatible Supabase client
 - **Tables:** `posts_new`, `post_ratings`, `comments`
 - **Real-time:** Subscriptions for live like counts (`ratings.ts`)
 - **Storage:** Image uploads for posts
+
+### Caching Architecture
+The app uses a hybrid Server Component + Client Component pattern for optimal performance:
+
+- **Server Components** (`page.tsx`, `rank/page.tsx`): Fetch and cache initial data using `unstable_cache`
+- **Client Components** (`HomeFeed`, `RankGrid`): Handle interactivity, real-time updates, infinite scroll
+- **Cache invalidation:** Server Actions with `revalidateTag()` after mutations
+
+Cache configuration (in `app/utils/cached-posts.ts`):
+| Page | Cache Duration | Tags |
+|------|----------------|------|
+| Home | 60 seconds | `posts`, `home-posts` |
+| Ranking | 5 minutes | `posts`, `ranked-posts` |
 
 ### Data Flow Pattern
 The app uses a mock/production toggle via `NEXT_PUBLIC_USE_MOCKS` env var. Utility functions in `app/utils/` check this flag and return mock data or query Supabase.
@@ -81,8 +97,10 @@ npx vitest run tests/comments.test.ts
 ```
 
 ## Active Technologies
-- TypeScript 5.x with React 19 / Next.js 16 + Next.js 16.1.1, React 19.2.0, Tailwind CSS v4, @supabase/supabase-js (001-tailwind-ui-refactor)
-- Supabase (PostgreSQL) for posts, ratings, comments; Supabase Storage for images (001-tailwind-ui-refactor)
+- TypeScript 5.x with React 19 / Next.js 16 + Next.js 16.1.1, React 19.2.0, Tailwind CSS v4, @supabase/supabase-js, @supabase/ssr
+- Supabase (PostgreSQL) for posts, ratings, comments; Supabase Storage for images
+- Next.js `unstable_cache` for server-side data caching
 
 ## Recent Changes
+- 002-caching-optimization: Implemented hybrid Server Component + Client Component architecture with `unstable_cache` for reducing Supabase hits. Added `@supabase/ssr` package, server-side Supabase client, cached data fetchers, and cache revalidation via Server Actions.
 - 001-tailwind-ui-refactor: Added TypeScript 5.x with React 19 / Next.js 16 + Next.js 16.1.1, React 19.2.0, Tailwind CSS v4, @supabase/supabase-js

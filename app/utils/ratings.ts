@@ -1,5 +1,6 @@
 import { supabase } from "./client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { revalidatePostsCache } from "../actions/revalidate-posts";
 
 export interface RatingResult {
   success: boolean;
@@ -18,7 +19,11 @@ export interface PostLikesUpdate {
  * - If session hasn't liked the post: adds like and increments count
  * - If session has already liked: removes like and decrements count
  *
- * Uses database constraints to enforce one rating per session per post
+ * Uses database constraints to enforce one rating per session per post.
+ * After a successful operation, invalidates the posts cache to ensure
+ * fresh data on next page visit.
+ *
+ * @see app/actions/revalidate-posts.ts for cache invalidation
  */
 export async function togglePostLike(
   postId: string,
@@ -33,6 +38,8 @@ export async function togglePostLike(
     };
   }
 
+  console.log(`[Ratings] Toggling like for post ${postId} by session ${sessionId.slice(0, 8)}...`);
+
   // Check if session has already liked this post
   const { data: existingRating } = await supabase
     .from("post_ratings")
@@ -43,6 +50,8 @@ export async function togglePostLike(
 
   if (existingRating) {
     // Remove like (unlike)
+    console.log(`[Ratings] Removing like from post ${postId}`);
+
     const { error: deleteError } = await supabase
       .from("post_ratings")
       .delete()
@@ -50,6 +59,7 @@ export async function togglePostLike(
       .eq("session_id", sessionId);
 
     if (deleteError) {
+      console.error(`[Ratings] Error removing like:`, deleteError);
       return {
         success: false,
         isLiked: true,
@@ -73,6 +83,7 @@ export async function togglePostLike(
       .eq("id", postId);
 
     if (updateError) {
+      console.error(`[Ratings] Error updating like count:`, updateError);
       return {
         success: false,
         isLiked: false,
@@ -81,6 +92,12 @@ export async function togglePostLike(
       };
     }
 
+    // Invalidate posts cache after successful unlike
+    console.log(`[Ratings] Unlike successful, invalidating cache`);
+    revalidatePostsCache().catch((err) => {
+      console.error("[Ratings] Error revalidating cache:", err);
+    });
+
     return {
       success: true,
       isLiked: false,
@@ -88,6 +105,8 @@ export async function togglePostLike(
     };
   } else {
     // Add like
+    console.log(`[Ratings] Adding like to post ${postId}`);
+
     const { error: insertError } = await supabase
       .from("post_ratings")
       .insert({
@@ -98,6 +117,7 @@ export async function togglePostLike(
     if (insertError) {
       // Handle unique constraint violation (race condition)
       if (insertError.code === "23505") {
+        console.warn(`[Ratings] Race condition - post already liked`);
         return {
           success: false,
           isLiked: true,
@@ -105,6 +125,7 @@ export async function togglePostLike(
           error: "Already liked this post",
         };
       }
+      console.error(`[Ratings] Error adding like:`, insertError);
       return {
         success: false,
         isLiked: false,
@@ -128,6 +149,7 @@ export async function togglePostLike(
       .eq("id", postId);
 
     if (updateError) {
+      console.error(`[Ratings] Error updating like count:`, updateError);
       return {
         success: false,
         isLiked: true,
@@ -135,6 +157,12 @@ export async function togglePostLike(
         error: updateError.message,
       };
     }
+
+    // Invalidate posts cache after successful like
+    console.log(`[Ratings] Like successful, invalidating cache`);
+    revalidatePostsCache().catch((err) => {
+      console.error("[Ratings] Error revalidating cache:", err);
+    });
 
     return {
       success: true,
