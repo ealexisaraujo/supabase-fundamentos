@@ -5,6 +5,7 @@ import Image from "next/image";
 import { supabase } from "../utils/client";
 import { CloseIcon } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
+import { revalidatePostsCache } from "../actions/revalidate-posts";
 
 export default function CreatePage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -104,6 +105,11 @@ export default function CreatePage() {
 
     try {
       await uploadAndCreatePost(imageFile);
+
+      // Invalidate cache so the new post appears in the feed immediately
+      revalidatePostsCache().catch((err) => {
+        console.error("[CreatePost] Error revalidating cache:", err);
+      });
 
       // Éxito
       setMessage({ type: "success", text: "¡Post creado exitosamente!" });
