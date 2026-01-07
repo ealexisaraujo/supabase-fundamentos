@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "og:generate": "node scripts/generate-og-image.mjs",
+    "og:upload": "node scripts/upload-og-to-supabase.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.0",
