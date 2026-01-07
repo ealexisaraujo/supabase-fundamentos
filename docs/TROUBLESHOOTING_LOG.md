@@ -51,3 +51,27 @@ This document summarizes the key issues, root causes, and solutions discovered d
     1.  The image container in `app/page.tsx` was set to a fixed square aspect ratio (`aspect-square`).
     2.  The `<img>` tag uses the `object-contain` class to display the full image inside the container without cropping.
     3.  The container was given a background color (`bg-card-bg`) to fill the empty "letterbox" space with a non-distracting, consistent color. This provides a clean, uniform grid while ensuring the full image is always visible.
+
+---
+
+## Issue 6: Production Storage Upload Fails with RLS Policy Violation (Jan 2026)
+*   **Symptom:** Image uploads in production failed with `StorageApiError: new row violates row-level security policy`. The error occurred on POST requests to `/storage/v1/object/images_platzi/...` returning 400 Bad Request.
+*   **Root Cause:** The original storage policies targeted only the `anon` role instead of `public`. Additionally, the SELECT policy was missing in production. Supabase Storage requires both INSERT and SELECT policies to function correctly—SELECT is needed internally to verify uploads and check for existing objects.
+*   **Original Policy (Broken):**
+    ```sql
+    CREATE POLICY "Allow anonymous uploads in images_platzi"
+    ON storage.objects FOR INSERT
+    TO anon  -- Too restrictive!
+    WITH CHECK (bucket_id = 'images_platzi');
+    ```
+*   **Solution:** Created migration `20260107000000_fix_storage_policies.sql` that:
+    1.  Drops the old restrictive `anon`-only policies
+    2.  Creates new policies targeting `public` role (includes both `anon` and `authenticated`)
+    3.  Adds all CRUD policies: SELECT, INSERT, UPDATE, DELETE
+    ```sql
+    CREATE POLICY "Allow public uploads to images_platzi"
+    ON storage.objects FOR INSERT
+    TO public  -- Correct: includes anon + authenticated
+    WITH CHECK (bucket_id = 'images_platzi');
+    ```
+*   **Key Lesson:** For Supabase Storage buckets, always use `TO public` instead of `TO anon` to ensure compatibility with all authentication states. Also ensure SELECT policy exists alongside INSERT.
