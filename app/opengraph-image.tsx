@@ -1,13 +1,75 @@
 import { ImageResponse } from "next/og";
 
+// Route segment config
 export const runtime = "edge";
 
+// Image metadata
 export const alt = "Suplatzigram - Curso de Supabase de Platzi";
 export const size = {
   width: 1200,
   height: 630,
 };
 export const contentType = "image/png";
+
+// =============================================================================
+// ASSETS & ICONS
+// =============================================================================
+
+const InstagramIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <rect x="2" y="2" width="20" height="20" rx="5" stroke="white" strokeWidth="2" />
+    <circle cx="12" cy="12" r="4" stroke="white" strokeWidth="2" />
+    <circle cx="18" cy="6" r="1.5" fill="white" />
+  </svg>
+);
+
+const SupabaseBoltIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="#3ECF8E" />
+  </svg>
+);
+
+const PhotoIcon = () => (
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+    <rect x="3" y="3" width="18" height="18" rx="2" stroke="white" strokeWidth="1.5" strokeOpacity="0.6" />
+    <circle cx="8.5" cy="8.5" r="1.5" fill="white" fillOpacity="0.6" />
+    <path d="M21 15L16 10L5 21" stroke="white" strokeWidth="1.5" strokeOpacity="0.6" />
+  </svg>
+);
+
+const HeartIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff4757">
+    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+  </svg>
+);
+
+const CommentIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+    <path
+      d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+      stroke="white"
+      strokeWidth="2"
+    />
+  </svg>
+);
+
+const SupabaseStackIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="white" strokeWidth="2" />
+    <path d="M2 17L12 22L22 17" stroke="white" strokeWidth="2" />
+    <path d="M2 12L12 17L22 12" stroke="white" strokeWidth="2" />
+  </svg>
+);
+
+const SparkleIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+    <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z" />
+  </svg>
+);
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
 
 export default async function Image() {
   return new ImageResponse(
@@ -17,134 +79,476 @@ export default async function Image() {
           height: "100%",
           width: "100%",
           display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          fontFamily: "system-ui, sans-serif",
+          position: "relative",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          // Seamless gradient background
+          background: "linear-gradient(110deg, #1a0a20 0%, #150a18 25%, #1a1025 50%, #201520 75%, #251510 100%)",
+          overflow: "hidden",
         }}
       >
+        {/* --- BACKGROUND AMBIENT LIGHTING --- */}
+
+        {/* Purple wash (Left) */}
+        <div
+          style={{
+            position: "absolute",
+            top: "0",
+            left: "0",
+            width: "100%",
+            height: "100%",
+            background: "radial-gradient(ellipse 80% 100% at 0% 50%, rgba(139, 92, 246, 0.35) 0%, transparent 60%)",
+            display: "flex",
+          }}
+        />
+
+        {/* Warm wash (Right) */}
+        <div
+          style={{
+            position: "absolute",
+            top: "0",
+            left: "0",
+            width: "100%",
+            height: "100%",
+            background: "radial-gradient(ellipse 80% 100% at 100% 50%, rgba(249, 115, 22, 0.4) 0%, transparent 60%)",
+            display: "flex",
+          }}
+        />
+
+        {/* Bridge gradient (Center) */}
+        <div
+          style={{
+            position: "absolute",
+            top: "0",
+            left: "0",
+            width: "100%",
+            height: "100%",
+            background: "radial-gradient(ellipse 60% 80% at 50% 50%, rgba(236, 72, 153, 0.2) 0%, transparent 70%)",
+            display: "flex",
+          }}
+        />
+
+        {/* Decorative blobs */}
+        <div
+          style={{
+            position: "absolute",
+            top: "-200px",
+            right: "100px",
+            width: "700px",
+            height: "600px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(236, 72, 153, 0.45) 0%, rgba(139, 92, 246, 0.2) 50%, transparent 70%)",
+            filter: "blur(60px)",
+            display: "flex",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: "-200px",
+            left: "-150px",
+            width: "700px",
+            height: "600px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(139, 92, 246, 0.5) 0%, rgba(168, 85, 247, 0.3) 40%, transparent 70%)",
+            filter: "blur(60px)",
+            display: "flex",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: "-150px",
+            right: "-100px",
+            width: "650px",
+            height: "550px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(249, 115, 22, 0.55) 0%, rgba(251, 146, 60, 0.3) 50%, transparent 70%)",
+            filter: "blur(50px)",
+            display: "flex",
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            right: "20%",
+            width: "500px",
+            height: "400px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(251, 146, 60, 0.25) 0%, transparent 70%)",
+            filter: "blur(40px)",
+            transform: "translateY(-50%)",
+            display: "flex",
+          }}
+        />
+
+        {/* --- NEON STREAKS --- */}
+
+        {/* Main cyan diagonal */}
+        <div
+          style={{
+            position: "absolute",
+            top: "18%",
+            right: "12%",
+            width: "400px",
+            height: "3px",
+            backgroundColor: "#22d3d1",
+            borderRadius: "10px",
+            transform: "rotate(-32deg)",
+            boxShadow: "0 0 15px #22d3d1, 0 0 30px #22d3d1, 0 0 45px rgba(34, 211, 209, 0.5)",
+            opacity: 0.8,
+            display: "flex",
+          }}
+        />
+
+        {/* Secondary cyan diagonal */}
+        <div
+          style={{
+            position: "absolute",
+            top: "28%",
+            right: "18%",
+            width: "300px",
+            height: "2px",
+            backgroundColor: "#22d3d1",
+            borderRadius: "10px",
+            transform: "rotate(-32deg)",
+            boxShadow: "0 0 12px #22d3d1, 0 0 25px rgba(34, 211, 209, 0.4)",
+            opacity: 0.5,
+            display: "flex",
+          }}
+        />
+
+        {/* Curved SVG line */}
+        <div
+          style={{
+            position: "absolute",
+            top: "20%",
+            right: "5%",
+            display: "flex",
+            filter: "drop-shadow(0 0 6px #22d3d1) drop-shadow(0 0 15px #22d3d1)",
+            opacity: 0.6,
+          }}
+        >
+          <svg width="280" height="180" viewBox="0 0 280 180" fill="none">
+            <path
+              d="M0 140 Q 80 40, 160 90 T 280 40"
+              stroke="#22d3d1"
+              strokeWidth="2"
+              strokeLinecap="round"
+              fill="none"
+            />
+          </svg>
+        </div>
+
+        {/* --- MAIN CONTENT --- */}
+
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "white",
-            borderRadius: "24px",
-            padding: "60px 80px",
-            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+            padding: "50px 60px",
+            width: "50%",
+            zIndex: 10,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "20px",
-            }}
-          >
-            <svg
-              width="80"
-              height="80"
-              viewBox="0 0 24 24"
-              fill="none"
-              style={{ marginRight: "20px" }}
-            >
-              <rect
-                x="2"
-                y="2"
-                width="20"
-                height="20"
-                rx="5"
-                stroke="#667eea"
-                strokeWidth="2"
-              />
-              <circle
-                cx="12"
-                cy="12"
-                r="4"
-                stroke="#764ba2"
-                strokeWidth="2"
-              />
-              <circle cx="18" cy="6" r="1.5" fill="#667eea" />
-            </svg>
-            <h1
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "24px" }}>
+            <div
               style={{
-                fontSize: "64px",
-                fontWeight: "bold",
-                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                backgroundClip: "text",
-                color: "transparent",
-                margin: 0,
+                width: "44px",
+                height: "44px",
+                borderRadius: "12px",
+                background: "linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: "12px",
+                boxShadow: "0 0 25px rgba(253, 29, 29, 0.5)",
+              }}
+            >
+              <InstagramIcon />
+            </div>
+            <span
+              style={{
+                fontSize: "22px",
+                fontWeight: 600,
+                color: "white",
+                textShadow: "0 0 20px rgba(255, 255, 255, 0.3)",
               }}
             >
               Suplatzigram
-            </h1>
+            </span>
           </div>
-          <p
-            style={{
-              fontSize: "28px",
-              color: "#4b5563",
-              margin: 0,
-              textAlign: "center",
-            }}
-          >
-            App inspirada en Instagram
-          </p>
+
+          {/* Title */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span
+              style={{
+                fontSize: "52px",
+                fontWeight: 800,
+                fontStyle: "italic",
+                lineHeight: 1.15,
+                letterSpacing: "-0.02em",
+                color: "white",
+                textShadow: "0 0 40px rgba(255, 255, 255, 0.3)",
+              }}
+            >
+              Aprende a
+            </span>
+
+            <span
+              style={{
+                fontSize: "52px",
+                fontWeight: 800,
+                fontStyle: "italic",
+                lineHeight: 1.15,
+                letterSpacing: "-0.02em",
+                background: "linear-gradient(90deg, #ff3366 0%, #ff6b35 50%, #f59e0b 100%)",
+                backgroundClip: "text",
+                color: "transparent",
+                textShadow: "0 0 40px rgba(255, 51, 102, 0.4)",
+              }}
+            >
+              crear apps en
+            </span>
+
+            <span
+              style={{
+                fontSize: "52px",
+                fontWeight: 800,
+                fontStyle: "italic",
+                lineHeight: 1.15,
+                letterSpacing: "-0.02em",
+                background: "linear-gradient(90deg, #ff6b35 0%, #f59e0b 100%)",
+                backgroundClip: "text",
+                color: "transparent",
+                textShadow: "0 0 40px rgba(245, 158, 11, 0.4)",
+              }}
+            >
+              tiempo real
+            </span>
+          </div>
+
+          {/* Subtitle */}
+          <span style={{ fontSize: "20px", color: "rgba(255, 255, 255, 0.7)", marginTop: "24px" }}>
+            Curso de Supabase de Platzi
+          </span>
+
+          {/* Badges */}
+          <div style={{ display: "flex", marginTop: "28px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                backgroundColor: "rgba(0, 0, 0, 0.4)",
+                border: "1px solid rgba(62, 207, 142, 0.4)",
+                borderRadius: "50px",
+                padding: "10px 18px",
+                marginRight: "12px",
+                boxShadow: "0 0 20px rgba(62, 207, 142, 0.15)",
+              }}
+            >
+              <div style={{ marginRight: "8px", display: "flex" }}>
+                <SupabaseBoltIcon />
+              </div>
+              <span style={{ fontSize: "15px", fontWeight: 500, color: "white" }}>Supabase</span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                backgroundColor: "rgba(0, 0, 0, 0.4)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                borderRadius: "50px",
+                padding: "10px 18px",
+              }}
+            >
+              <span style={{ fontSize: "15px", fontWeight: 500, color: "white" }}>Next.js</span>
+            </div>
+          </div>
+
+          {/* Footer */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              marginTop: "30px",
-              gap: "12px",
+              marginTop: "auto",
+              paddingTop: "30px",
             }}
           >
             <div
               style={{
-                backgroundColor: "#3ECF8E",
-                padding: "8px 20px",
-                borderRadius: "8px",
+                width: "30px",
+                height: "30px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #98ca3f 0%, #7ab32c 100%)",
                 display: "flex",
                 alignItems: "center",
+                justifyContent: "center",
+                marginRight: "10px",
+                boxShadow: "0 0 15px rgba(152, 202, 63, 0.5)",
               }}
             >
-              <span style={{ color: "white", fontSize: "20px", fontWeight: 600 }}>
-                Supabase
-              </span>
+              <span style={{ color: "white", fontWeight: 700, fontSize: "13px" }}>P</span>
             </div>
-            <span style={{ fontSize: "24px", color: "#9ca3af" }}>+</span>
+            <span style={{ fontSize: "15px", fontWeight: 500, color: "rgba(255, 255, 255, 0.6)" }}>
+              platzi.com
+            </span>
+          </div>
+        </div>
+
+        {/* --- FLOATING 3D CARDS --- */}
+
+        <div
+          style={{
+            position: "absolute",
+            right: "70px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Instagram Card */}
+          <div
+            style={{
+              width: "195px",
+              backgroundColor: "rgba(15, 15, 25, 0.85)",
+              border: "2px solid rgba(168, 85, 247, 0.6)",
+              borderRadius: "20px",
+              padding: "12px",
+              boxShadow: "0 0 35px rgba(168, 85, 247, 0.3), 0 30px 60px rgba(0, 0, 0, 0.5)",
+              transform: "rotate(5deg)",
+              display: "flex",
+              flexDirection: "column",
+              marginBottom: "20px",
+            }}
+          >
             <div
               style={{
-                backgroundColor: "#000",
-                padding: "8px 20px",
-                borderRadius: "8px",
+                width: "171px",
+                height: "115px",
+                borderRadius: "14px",
+                background: "linear-gradient(135deg, #5b21b6 0%, #7c3aed 50%, #a855f7 100%)",
                 display: "flex",
                 alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              <span style={{ color: "white", fontSize: "20px", fontWeight: 600 }}>
-                Next.js
+              <PhotoIcon />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", marginTop: "10px" }}>
+              <HeartIcon />
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "white", marginLeft: "5px" }}>
+                2.4k
+              </span>
+              <div style={{ marginLeft: "14px", display: "flex" }}>
+                <CommentIcon />
+              </div>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "white", marginLeft: "5px" }}>
+                128
               </span>
             </div>
           </div>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            marginTop: "40px",
-          }}
-        >
-          <p
+
+          {/* Realtime Card */}
+          <div
             style={{
-              fontSize: "24px",
-              color: "white",
-              margin: 0,
-              opacity: 0.9,
+              width: "175px",
+              backgroundColor: "rgba(15, 15, 25, 0.85)",
+              border: "2px solid rgba(62, 207, 142, 0.6)",
+              borderRadius: "20px",
+              padding: "12px",
+              boxShadow: "0 0 35px rgba(62, 207, 142, 0.25), 0 30px 60px rgba(0, 0, 0, 0.4)",
+              transform: "rotate(-4deg) translateX(-30px)",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            Curso de Supabase de Platzi
-          </p>
+            <div
+              style={{
+                width: "151px",
+                height: "90px",
+                borderRadius: "14px",
+                background: "linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <SupabaseStackIcon />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", marginTop: "8px" }}>
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: "#3ECF8E",
+                  marginRight: "6px",
+                  boxShadow: "0 0 10px #3ECF8E",
+                }}
+              />
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "#3ECF8E" }}>Realtime</span>
+            </div>
+          </div>
+        </div>
+
+        {/* --- NOTIFICATIONS & DECOR --- */}
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: "175px",
+            right: "300px",
+            display: "flex",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "rgba(15, 15, 25, 0.9)",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              borderRadius: "20px",
+              padding: "10px 16px",
+              display: "flex",
+              alignItems: "center",
+              boxShadow: "0 0 25px rgba(0, 0, 0, 0.5)",
+            }}
+          >
+            <span style={{ fontSize: "13px", color: "white", marginRight: "6px" }}>+1 nuevo post</span>
+            <span style={{ fontSize: "14px" }}>🎉</span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            bottom: "55px",
+            right: "55px",
+            display: "flex",
+            opacity: 0.6,
+            filter: "drop-shadow(0 0 4px white)",
+          }}
+        >
+          <SparkleIcon />
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            top: "90px",
+            right: "380px",
+            display: "flex",
+            opacity: 0.35,
+            transform: "scale(0.7)",
+            filter: "drop-shadow(0 0 4px white)",
+          }}
+        >
+          <SparkleIcon />
         </div>
       </div>
     ),
