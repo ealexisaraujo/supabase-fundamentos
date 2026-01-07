@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://suplatzigram.vercel.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://supabase-fundamentos-dun.vercel.app";
 
 export const metadata: Metadata = {
   title: "Suplatzigram",
