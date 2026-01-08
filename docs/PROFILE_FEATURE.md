@@ -47,13 +47,20 @@ CREATE TABLE public.profiles (
 ### Folder Structure
 
 ```
-app/profile/
-├── page.tsx                    → /profile (entry point with auth check)
-├── create/
-│   └── page.tsx               → /profile/create (new profile form)
-└── [username]/
-    ├── page.tsx               → /profile/:username (server component)
-    └── ProfileClientPage.tsx  → Client component for interactivity
+app/
+├── profile/
+│   ├── page.tsx                    → /profile (entry point with auth check)
+│   ├── create/
+│   │   └── page.tsx               → /profile/create (new profile form)
+│   └── [username]/
+│       ├── page.tsx               → /profile/:username (server component)
+│       └── ProfileClientPage.tsx  → Client component for interactivity
+├── actions/
+│   └── check-username.ts          → Server Action for username validation
+├── hooks/
+│   └── useUsernameValidation.ts   → Client hook for debounced validation
+└── utils/
+    └── username-validation.ts     → Username format rules and utilities
 ```
 
 #### Route Explanations
@@ -93,6 +100,7 @@ Located in `app/profile/[username]/ProfileClientPage.tsx`:
 - View mode with profile information display
 - Edit mode toggle for profile owners
 - Avatar display with fallback icon
+- Avatar hover overlay with "Editar foto" for owners
 - Website link with external redirect
 
 #### ProfileEditForm
@@ -117,10 +125,11 @@ Located in `app/components/ProfileEditForm.tsx`:
 
 **Features:**
 
-- Avatar upload with preview
-- Form validation
-- Error message display
+- Avatar upload with preview and hover overlay
+- Real-time username validation with visual feedback
+- Form validation with error messages
 - Loading states
+- Debounced server-side username availability check
 
 #### Button Component
 
@@ -199,6 +208,29 @@ export async function createClient() {
 
 Used in Server Components for authenticated data fetching.
 
+#### Middleware
+
+Located in `middleware.ts`:
+
+The middleware ensures Supabase auth sessions are refreshed on every request and cookies are properly synchronized between client and server.
+
+```typescript
+export async function middleware(request: NextRequest) {
+  // Creates Supabase client with cookie handling
+  const supabase = createServerClient(url, key, { cookies: { ... } })
+
+  // Refreshes auth session and updates cookies
+  await supabase.auth.getUser()
+
+  return response
+}
+```
+
+**Why it's needed:**
+- Server components need fresh auth tokens from cookies
+- Supabase auth tokens expire and need automatic refresh
+- RLS policies depend on valid auth sessions (`auth.uid()`)
+
 ### Storage Integration
 
 Avatars are stored in the `images_platzi` bucket:
@@ -212,6 +244,91 @@ await supabase.storage
     cacheControl: "3600",
     upsert: true,
   });
+```
+
+## Username Validation System
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Client (Browser)                            │
+├─────────────────────────────────────────────────────────────────┤
+│  ProfileEditForm.tsx                                            │
+│  └── useUsernameValidation hook                                 │
+│      ├── Phase 1: Instant format validation (client-side)       │
+│      └── Phase 2: Debounced availability check (server-side)    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ 500ms debounce
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Server Action                               │
+├─────────────────────────────────────────────────────────────────┤
+│  checkUsernameAvailable()                                       │
+│  ├── Authentication check                                       │
+│  ├── Rate limiting (10 req/min per user)                        │
+│  ├── Input validation                                           │
+│  ├── Database query (excludes own username)                     │
+│  └── Timing attack prevention (min 100ms response)              │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Database (Supabase)                         │
+├─────────────────────────────────────────────────────────────────┤
+│  profiles table                                                 │
+│  └── UNIQUE constraint on username (final defense)              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Username Rules
+
+| Rule | Value | Example |
+|------|-------|---------|
+| Minimum length | 3 characters | `abc` ✓ |
+| Maximum length | 30 characters | - |
+| Allowed characters | `a-z`, `0-9`, `.`, `_` | `john_doe.123` ✓ |
+| Start/End restriction | Cannot start/end with `.` or `_` | `_john` ✗ |
+| Consecutive restriction | No `..` or `__` | `john..doe` ✗ |
+| Case sensitivity | Normalized to lowercase | `John` → `john` |
+
+### Reserved Usernames
+
+The system blocks 60+ reserved usernames including:
+
+- **System**: `admin`, `administrator`, `root`, `system`, `support`
+- **Routes**: `login`, `profile`, `settings`, `post`, `rank`
+- **Attack vectors**: `null`, `undefined`, `anonymous`, `test`
+- **Brand**: `supabase`, `platzi`, `suplatzigram`
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `app/utils/username-validation.ts` | Format rules, reserved list, normalization utilities |
+| `app/actions/check-username.ts` | Secure Server Action with rate limiting |
+| `app/hooks/useUsernameValidation.ts` | React hook for debounced validation |
+
+### Usage
+
+```tsx
+import { useUsernameValidation } from "@/app/hooks/useUsernameValidation";
+
+function ProfileForm() {
+  const validation = useUsernameValidation(currentUsername);
+
+  return (
+    <input
+      value={username}
+      onChange={(e) => {
+        setUsername(e.target.value);
+        validation.validate(e.target.value);
+      }}
+      className={validation.status === "valid" ? "border-green-500" : ""}
+    />
+  );
+}
 ```
 
 ## Data Flow
@@ -243,18 +360,42 @@ ProfileClientPage renders
         ↓
 Check: Is current user the owner?
         ↓
-   Yes → Show "Editar Perfil" button
+   Yes → Show "Editar Perfil" button + avatar hover
    No → View-only mode
         ↓
-User clicks "Editar Perfil"
+User clicks "Editar Perfil" or avatar
         ↓
 ProfileEditForm renders
         ↓
-User updates fields → Save
+User updates fields → Real-time validation
         ↓
 Supabase upsert → Success
         ↓
 Return to view mode with updated data
+```
+
+### Username Validation Flow
+
+```
+User types username
+        ↓
+Phase 1: Instant client-side format check
+        ↓
+   Invalid format → Show error immediately
+   Valid format → Continue to Phase 2
+        ↓
+Phase 2: Debounced (500ms) server check
+        ↓
+Server Action: checkUsernameAvailable()
+        ↓
+   ├── Auth check (must be logged in)
+   ├── Rate limit check (10/min)
+   ├── Format validation (server-side)
+   ├── Database query (exclude own username)
+   └── Return result with timing padding
+        ↓
+   Available → Green checkmark
+   Not available → Red error (generic message)
 ```
 
 ## Design Decisions
@@ -311,6 +452,24 @@ Created `app/utils/image.ts` with `shouldSkipImageOptimization()` helper that:
 
 This approach is environment-aware and works in both local development and production.
 
+### 8. Avatar Hover Feature
+
+Profile owners see a hover overlay on their avatar with:
+- Dark semi-transparent background (50% opacity)
+- Camera icon
+- "Editar foto" text
+- Click triggers edit mode
+
+This follows common UX patterns from Instagram, Facebook, and other social platforms.
+
+### 9. Two-Phase Username Validation
+
+Implemented a production-grade validation system:
+- **Phase 1 (Client)**: Instant format validation for immediate feedback
+- **Phase 2 (Server)**: Debounced availability check with security measures
+
+This balances UX (fast feedback) with security (rate limiting, timing attack prevention).
+
 ## Security Considerations
 
 ### 1. Row Level Security (RLS)
@@ -336,11 +495,30 @@ if (user && user.id === profile.id) setIsOwner(true);
 
 Avatar uploads are restricted to authenticated users with proper bucket policies.
 
-### 4. Input Validation
+### 4. Username Validation Security
 
-- Username: Required, unique constraint at database level
-- Website: URL format validation
-- Avatar: File type and size restrictions
+Following OWASP guidelines, the username validation system implements:
+
+| Security Measure | Implementation | Purpose |
+|-----------------|----------------|---------|
+| Generic error messages | "No disponible" instead of "exists" | Prevent enumeration attacks |
+| Rate limiting | 10 requests/min per user | Prevent brute-force |
+| Timing attack prevention | Min 100ms response time | Consistent timing |
+| Authentication required | Only logged-in users can check | Access control |
+| Reserved usernames | 60+ blocked names | Prevent abuse |
+| Input sanitization | Format validation | Prevent injection |
+| Database constraint | UNIQUE as final defense | Defense in depth |
+
+**OWASP References:**
+- [Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
+- [Testing for Account Enumeration](https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/03-Identity_Management_Testing/04-Testing_for_Account_Enumeration_and_Guessable_User_Account)
+
+### 5. Middleware for Session Management
+
+The middleware ensures:
+- Auth sessions are refreshed on every request
+- Cookies are properly synchronized
+- RLS policies have valid auth context
 
 ## Migration
 
@@ -354,9 +532,10 @@ supabase db push
 supabase migration up
 ```
 
-### Migration File
+### Migration Files
 
-`supabase/migrations/20260108000000_create_profiles_table.sql`
+- `supabase/migrations/20260108000000_create_profiles_table.sql` - Initial schema
+- `supabase/migrations/fix_profiles_schema` (production) - Added missing columns, fixed null usernames
 
 ## Testing
 
@@ -365,11 +544,17 @@ supabase migration up
 - [ ] Navigate to `/profile` when logged out → redirects to login
 - [ ] Navigate to `/profile` when logged in without profile → redirects to create
 - [ ] Create profile with all fields → success
-- [ ] Create profile with duplicate username → error message
-- [ ] View own profile → shows Edit button
-- [ ] View other user's profile → no Edit button
+- [ ] Create profile with duplicate username → generic error message
+- [ ] Create profile with reserved username (admin, null) → error message
+- [ ] View own profile → shows Edit button and avatar hover
+- [ ] View other user's profile → no Edit button, no hover
+- [ ] Hover over avatar (owner) → shows "Editar foto" overlay
+- [ ] Click avatar (owner) → opens edit mode
 - [ ] Edit profile → changes persist
 - [ ] Upload avatar → preview shows, saves correctly
+- [ ] Change username → real-time validation feedback
+- [ ] Try existing username → "No disponible" error
+- [ ] Try invalid format (too short, special chars) → format error
 
 ## Future Enhancements
 
@@ -381,3 +566,5 @@ supabase migration up
 6. **Account Deletion**: Self-service account removal
 7. **Username Change History**: Track username changes
 8. **Profile Themes**: Customizable profile appearance
+9. **CAPTCHA Integration**: Additional bot protection for profile creation
+10. **Redis Rate Limiting**: Replace in-memory rate limiting with Upstash Redis

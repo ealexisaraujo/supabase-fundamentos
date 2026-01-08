@@ -4,9 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "../utils/client";
-import { CameraIcon } from "./icons";
+import { CameraIcon, CheckIcon, LoadingIcon, ErrorIcon } from "./icons";
 import { Button } from "./Button";
 import { shouldSkipImageOptimization } from "../utils/image";
+import { useUsernameValidation } from "../hooks/useUsernameValidation";
+import { normalizeUsername } from "../utils/username-validation";
 
 interface Profile {
   id: string;
@@ -43,6 +45,9 @@ export default function ProfileEditForm({
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Username validation hook
+  const usernameValidation = useUsernameValidation(initialProfile?.username);
+
   useEffect(() => {
     if (initialProfile) {
       setFormData({
@@ -54,6 +59,13 @@ export default function ProfileEditForm({
       setAvatarPreview(initialProfile.avatar_url);
     }
   }, [initialProfile]);
+
+  // Validate username when it changes
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newUsername = e.target.value;
+    setFormData({ ...formData, username: newUsername });
+    usernameValidation.validate(newUsername);
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -95,6 +107,16 @@ export default function ProfileEditForm({
     setLoading(true);
     setMessage(null);
 
+    // Final validation check before submit
+    if (usernameValidation.status === "invalid") {
+      setMessage({
+        type: "error",
+        text: usernameValidation.error || "Nombre de usuario inválido",
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No estás autenticado");
@@ -108,7 +130,7 @@ export default function ProfileEditForm({
 
       const updates = {
         id: user.id,
-        username: formData.username,
+        username: normalizeUsername(formData.username),
         full_name: formData.full_name,
         bio: formData.bio,
         website: formData.website,
@@ -124,7 +146,8 @@ export default function ProfileEditForm({
 
       if (error) {
         if (error.code === "23505") {
-          throw new Error("El nombre de usuario ya existe");
+          // Security: Generic message - don't reveal username exists
+          throw new Error("Este nombre de usuario no está disponible");
         }
         throw error;
       }
@@ -144,6 +167,15 @@ export default function ProfileEditForm({
       setLoading(false);
     }
   };
+
+  // Determine if form can be submitted
+  const canSubmit =
+    !loading &&
+    formData.username.trim() !== "" &&
+    (usernameValidation.status === "valid" ||
+      usernameValidation.status === "idle" ||
+      // Allow submit if username unchanged
+      normalizeUsername(formData.username) === normalizeUsername(initialProfile?.username || ""));
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6 w-full max-w-md mx-auto">
@@ -181,14 +213,46 @@ export default function ProfileEditForm({
       <div className="space-y-4">
         <div>
           <label className="text-sm font-medium mb-1 block">Username</label>
-          <input
-            type="text"
-            required
-            value={formData.username}
-            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-            className="w-full px-4 py-2 rounded-lg bg-card-bg border border-border focus:ring-2 focus:ring-primary/50 outline-none"
-            placeholder="username"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              required
+              value={formData.username}
+              onChange={handleUsernameChange}
+              className={`w-full px-4 py-2 pr-10 rounded-lg bg-card-bg border outline-none transition-colors ${
+                usernameValidation.status === "valid"
+                  ? "border-green-500 focus:ring-2 focus:ring-green-500/50"
+                  : usernameValidation.status === "invalid"
+                  ? "border-red-500 focus:ring-2 focus:ring-red-500/50"
+                  : "border-border focus:ring-2 focus:ring-primary/50"
+              }`}
+              placeholder="username"
+              autoComplete="off"
+              spellCheck="false"
+            />
+            {/* Validation status icon */}
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              {usernameValidation.status === "validating" && (
+                <LoadingIcon className="w-5 h-5 text-foreground/50 animate-spin" />
+              )}
+              {usernameValidation.status === "valid" && (
+                <CheckIcon className="w-5 h-5 text-green-500" />
+              )}
+              {usernameValidation.status === "invalid" && (
+                <ErrorIcon className="w-5 h-5 text-red-500" />
+              )}
+            </div>
+          </div>
+          {/* Validation message */}
+          {usernameValidation.status === "invalid" && usernameValidation.error && (
+            <p className="mt-1 text-sm text-red-500">{usernameValidation.error}</p>
+          )}
+          {usernameValidation.status === "valid" && (
+            <p className="mt-1 text-sm text-green-500">Nombre de usuario disponible</p>
+          )}
+          {usernameValidation.status === "validating" && (
+            <p className="mt-1 text-sm text-foreground/50">Verificando disponibilidad...</p>
+          )}
         </div>
 
         <div>
@@ -242,7 +306,7 @@ export default function ProfileEditForm({
         variant="primary"
         size="lg"
         fullWidth
-        disabled={loading}
+        disabled={!canSubmit}
       >
         {loading ? "Guardando..." : isCreating ? "Crear Perfil" : "Guardar Cambios"}
       </Button>
