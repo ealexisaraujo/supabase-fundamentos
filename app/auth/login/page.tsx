@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/utils/client";
 import { BackIcon } from "@/app/components/icons";
+import { Button } from "@/app/components/Button";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,18 +27,18 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      setMessage({ type: "success", text: "¡Inicio de sesión exitoso!" });
-      
+      setMessage({ type: "success", text: "Inicio de sesion exitoso!" });
+
       // Redirect to home after a short delay
       setTimeout(() => {
         router.push("/");
         router.refresh();
       }, 1500);
-      
+
     } catch (error) {
       setMessage({
         type: "error",
-        text: error instanceof Error ? error.message : "Error al iniciar sesión",
+        text: error instanceof Error ? error.message : "Error al iniciar sesion",
       });
     } finally {
       setIsLoading(false);
@@ -47,14 +48,16 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 relative">
       {/* Back Button */}
-      <Link 
-        href="/"
-        className="absolute top-6 left-6 flex items-center gap-2 px-6 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-[#a3e635] to-[#bef264] text-black shadow-md hover:shadow-lg hover:brightness-105 transition-all transform hover:-translate-y-0.5"
-        aria-label="Volver al inicio"
-      >
-        <BackIcon className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
-        <span className="text-sm font-medium">Volver</span>
-      </Link>
+      <div className="absolute top-6 left-6">
+        <Button
+          variant="accent"
+          size="sm"
+          href="/"
+          leftIcon={<BackIcon className="w-4 h-4" />}
+        >
+          Volver
+        </Button>
+      </div>
 
       <div className="w-full max-w-sm relative">
         {/* Logo */}
@@ -62,7 +65,7 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Suplatzigram
           </h1>
-          <p className="text-foreground/60 mt-2">Inicia sesión en tu cuenta</p>
+          <p className="text-foreground/60 mt-2">Inicia sesion en tu cuenta</p>
         </div>
 
         {/* Formulario */}
@@ -71,7 +74,7 @@ export default function LoginPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Correo electrónico"
+            placeholder="Correo electronico"
             required
             className="w-full px-4 py-3 rounded-xl bg-card-bg border border-border text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
@@ -80,7 +83,7 @@ export default function LoginPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Contraseña"
+            placeholder="Contrasena"
             required
             className="w-full px-4 py-3 rounded-xl bg-card-bg border border-border text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
@@ -98,20 +101,22 @@ export default function LoginPage() {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
             disabled={isLoading}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
-          </button>
+            {isLoading ? "Iniciando sesion..." : "Iniciar sesion"}
+          </Button>
         </form>
 
         {/* Link a registro */}
         <p className="text-center text-foreground/60 mt-6">
-          ¿No tienes cuenta?{" "}
+          No tienes cuenta?{" "}
           <Link href="/auth/register" className="text-primary hover:underline">
-            Regístrate
+            Registrate
           </Link>
         </p>
       </div>

@@ -6,6 +6,12 @@
 DROP POLICY IF EXISTS "Allow anonymous select on images_platzi" ON storage.objects;
 DROP POLICY IF EXISTS "Allow anonymous uploads in images_platzi" ON storage.objects;
 
+-- Drop policies if they already exist (idempotency fix)
+DROP POLICY IF EXISTS "Allow public uploads to images_platzi" ON storage.objects;
+DROP POLICY IF EXISTS "Allow public read access to images_platzi" ON storage.objects;
+DROP POLICY IF EXISTS "Allow public update in images_platzi" ON storage.objects;
+DROP POLICY IF EXISTS "Allow public delete in images_platzi" ON storage.objects;
+
 -- 2. Create new INSERT policy for all users (anon + authenticated)
 CREATE POLICY "Allow public uploads to images_platzi"
 ON storage.objects
