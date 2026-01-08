@@ -4,10 +4,14 @@
  * Server Actions for Cache Revalidation
  *
  * These server actions are used to invalidate cached data after mutations.
+ * Supports both Redis (Upstash) and Next.js Data Cache invalidation.
  *
  * Next.js 16 Cache Invalidation Strategy:
  * - revalidateTag: Marks cached data with tag as stale (Data Cache)
  * - revalidatePath: Purges Router Cache for specific paths + revalidates Data Cache
+ *
+ * Redis Cache Invalidation Strategy:
+ * - invalidateCacheByTag: Deletes all Redis keys associated with a tag
  *
  * For post creation, we use revalidatePath('/') which:
  * 1. Purges the Router Cache for home page
@@ -15,12 +19,14 @@
  * 3. Ensures next navigation to home shows fresh data
  *
  * @see app/utils/cached-posts.ts for cache tags
+ * @see app/utils/redis/cache.ts for Redis cache utilities
  * @see https://nextjs.org/docs/app/api-reference/functions/revalidatePath
  * @see https://nextjs.org/docs/app/api-reference/functions/revalidateTag
  */
 
 import { revalidateTag, revalidatePath } from "next/cache";
 import { CACHE_TAGS } from "../utils/cached-posts";
+import { invalidateCacheByTag, cacheTags } from "../utils/redis";
 
 // Cache profile for revalidation - use "default" for standard behavior
 const CACHE_PROFILE = "default";
@@ -28,8 +34,8 @@ const CACHE_PROFILE = "default";
 /**
  * Revalidates all posts caches (home and ranked)
  *
- * Uses revalidatePath to purge both Router Cache and Data Cache.
- * This is the most reliable way to ensure fresh data on navigation.
+ * Invalidates both Redis cache and Next.js Data Cache.
+ * Uses revalidatePath to purge Router Cache.
  *
  * Call this after any mutation that affects post data:
  * - Like/Unlike a post
@@ -45,17 +51,22 @@ export async function revalidatePostsCache(): Promise<{
   console.log("[Server Action] Revalidating posts cache");
 
   try {
-    // Revalidate tags (Data Cache)
+    // Layer 1: Invalidate Redis cache (distributed)
+    await invalidateCacheByTag(cacheTags.POSTS);
+    await invalidateCacheByTag(cacheTags.HOME);
+    await invalidateCacheByTag(cacheTags.RANKED);
+
+    // Layer 2: Revalidate Next.js Data Cache tags
     revalidateTag(CACHE_TAGS.POSTS, CACHE_PROFILE);
     revalidateTag(CACHE_TAGS.HOME_POSTS, CACHE_PROFILE);
 
-    // Purge Router Cache for affected pages
+    // Layer 3: Purge Router Cache for affected pages
     // This is critical for client-side navigation to show fresh data
     revalidatePath("/");
     revalidatePath("/rank");
 
     console.log(
-      `[Server Action] Cache revalidated for paths: /, /rank and tags: ${CACHE_TAGS.POSTS}`
+      `[Server Action] Cache revalidated for paths: /, /rank and tags: ${CACHE_TAGS.POSTS} (Redis + Data Cache)`
     );
 
     return {

@@ -30,6 +30,7 @@ npm run lint         # Run ESLint
 ### Tech Stack
 - **Framework:** Next.js 16 (App Router, React 19)
 - **Backend:** Supabase (database, storage, real-time)
+- **Caching:** Upstash Redis (distributed) + Next.js unstable_cache (per-instance)
 - **Styling:** Tailwind CSS v4
 - **State Management:** TanStack Query (client-side caching)
 - **Testing:** Vitest + React Testing Library
@@ -43,6 +44,7 @@ npm run lint         # Run ESLint
 - `components/` - Reusable UI components (BottomNav, CommentsSection, HomeFeed, RankGrid)
 - `providers/` - React Context providers (AuthProvider, QueryProvider)
 - `utils/` - Supabase client and data fetching utilities
+- `utils/redis/` - Upstash Redis client and cache utilities
 - `utils/supabase/` - Server-side Supabase client utilities
 - `mocks/` - Mock data for testing and fallback
 - `types/` - TypeScript type definitions
@@ -55,22 +57,35 @@ npm run lint         # Run ESLint
 - **Real-time:** Subscriptions for live like counts (`ratings.ts`)
 - **Storage:** Image uploads for posts and avatars
 
-### Caching Architecture (Hybrid Server + Client)
+### Caching Architecture (Three-Layer Strategy)
 
-The app uses a two-layer caching strategy:
+The app uses a three-layer caching strategy:
 
-**1. Server-Side Caching** (unstable_cache):
+```
+Request → Redis (distributed) → unstable_cache (per-instance) → Supabase (database)
+```
+
+**1. Redis (Upstash) - Distributed Cache:**
+- `utils/redis/client.ts` - Upstash Redis client configuration
+- `utils/redis/cache.ts` - Cache utilities (get, set, invalidate by tag)
+- Survives deployments, shared across serverless functions
+- Sub-millisecond response times
+
+**2. Server-Side Caching** (unstable_cache):
 - `utils/cached-posts.ts` - Home/Ranked posts (60s/5min cache)
 - `utils/cached-profiles.ts` - Profile pages (3min cache)
+- Per-instance fallback when Redis unavailable
 - Invalidated via Server Actions with `revalidateTag()`
 
-**2. Client-Side Caching** (TanStack Query + AuthProvider):
+**3. Client-Side Caching** (TanStack Query + AuthProvider):
 - `providers/QueryProvider.tsx` - Configures TanStack Query (60s stale time)
 - `providers/AuthProvider.tsx` - Single `onAuthStateChange` listener
 - Prevents duplicate API calls during navigation
 
 | Layer | Data | Duration | Invalidation |
 |-------|------|----------|--------------|
+| Redis | Posts | 60s-5min | `invalidateCacheByTag()` |
+| Redis | Profiles | 3min | `invalidateCacheByTag()` |
 | Server | Posts | 60s-5min | `revalidateTag()` |
 | Server | Profiles | 3min | `revalidateTag()` |
 | Client | Liked status | 60s stale | TanStack Query |
@@ -100,6 +115,10 @@ Required in `.env` or `.env.local`:
 NEXT_PUBLIC_SUPABASE_URL=<your-supabase-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 NEXT_PUBLIC_USE_MOCKS=true|false  # Optional: toggle mock data
+
+# Upstash Redis (optional - falls back to unstable_cache if not configured)
+UPSTASH_REDIS_REST_URL=<your-upstash-url>
+UPSTASH_REDIS_REST_TOKEN=<your-upstash-token>
 ```
 
 ## Supabase Local Development
@@ -123,12 +142,14 @@ npx vitest run tests/comments.test.ts
 - TypeScript 5.x with React 19 / Next.js 16.1.1, React 19.2.0
 - Tailwind CSS v4
 - @supabase/supabase-js, @supabase/ssr
+- @upstash/redis for distributed Redis caching
 - @tanstack/react-query (TanStack Query) for client-side caching
 - Supabase (PostgreSQL) for posts, ratings, comments, profiles
 - Supabase Storage for images and avatars
 - Next.js `unstable_cache` for server-side data caching
 
 ## Recent Changes
+- 004-redis-caching: Implemented Upstash Redis caching layer as distributed cache. Added `utils/redis/` with client and cache utilities. Integrated Redis with cached-posts.ts and cached-profiles.ts. Updated cache invalidation in server actions. Graceful degradation when Redis not configured.
 - 003-client-caching: Implemented TanStack Query and AuthProvider for client-side caching. Reduced duplicate API calls during navigation. Added `app/providers/` with QueryProvider, AuthProvider. Refactored HomeFeed, RankGrid, ProfileClientPage to use `useQuery` and `useAuth` hooks.
 - 002-caching-optimization: Implemented hybrid Server Component + Client Component architecture with `unstable_cache` for reducing Supabase hits. Added `@supabase/ssr` package, server-side Supabase client, cached data fetchers, and cache revalidation via Server Actions.
 - 001-tailwind-ui-refactor: Added TypeScript 5.x with React 19 / Next.js 16 + Next.js 16.1.1, React 19.2.0, Tailwind CSS v4, @supabase/supabase-js

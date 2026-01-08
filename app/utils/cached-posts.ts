@@ -1,9 +1,9 @@
 /**
  * Cached Posts Data Fetchers
  *
- * This module provides cached versions of post fetching functions using Next.js unstable_cache.
- * These functions are designed for Server Components and reduce Supabase hits by caching
- * the initial data load.
+ * This module provides cached versions of post fetching functions using:
+ * 1. Upstash Redis (distributed cache, survives deployments)
+ * 2. Next.js unstable_cache (per-instance cache, backup layer)
  *
  * IMPORTANT: unstable_cache cannot use dynamic data sources like cookies() inside the cached
  * function. We use the browser-compatible Supabase client here since we're only reading
@@ -13,14 +13,25 @@
  * - Home posts: 60 second cache (balance freshness with performance)
  * - Ranked posts: 300 second cache (ranking changes less frequently)
  *
+ * Data Flow:
+ * Request → Redis (fast) → unstable_cache → Supabase (slow)
+ *
  * Real-time updates for likes are handled separately in client components.
  *
  * @see https://nextjs.org/docs/app/api-reference/functions/unstable_cache
+ * @see app/utils/redis/ for Redis caching layer
  */
 
 import { unstable_cache } from 'next/cache'
 import { createClient } from '@supabase/supabase-js'
 import { posts as mockPosts, type Post } from '../mocks/posts'
+import {
+  getFromCache,
+  setInCache,
+  cacheKeys,
+  cacheTags,
+  cacheTTL,
+} from './redis'
 
 // Debug: Check if we're using mocks
 const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
@@ -117,7 +128,10 @@ async function fetchRankedPosts(): Promise<Post[]> {
 /**
  * Cached version of fetchHomePosts
  *
- * Uses unstable_cache to cache posts for 60 seconds.
+ * Uses a two-layer caching strategy:
+ * 1. Redis (Upstash) - distributed cache, survives deployments
+ * 2. unstable_cache - per-instance fallback
+ *
  * The cache key includes the page number to support pagination.
  * Tagged with 'posts' for targeted invalidation via revalidateTag.
  *
@@ -128,9 +142,27 @@ async function fetchRankedPosts(): Promise<Post[]> {
 export async function getCachedHomePosts(page: number = 0, limit: number = 10): Promise<Post[]> {
   console.log(`[CachedPosts] getCachedHomePosts called - page: ${page}, limit: ${limit}`)
 
-  // Create a cached function with page-specific cache key
+  const cacheKey = cacheKeys.homePosts(page, limit)
+
+  // Layer 1: Try Redis first (fastest)
+  const redisData = await getFromCache<Post[]>(cacheKey)
+  if (redisData) {
+    console.log(`[CachedPosts] Redis HIT for ${cacheKey}`)
+    return redisData
+  }
+
+  // Layer 2: Fall back to unstable_cache + Supabase
+  console.log(`[CachedPosts] Redis MISS for ${cacheKey}, fetching from Supabase`)
   const cachedFetch = unstable_cache(
-    async () => fetchHomePosts(page, limit),
+    async () => {
+      const posts = await fetchHomePosts(page, limit)
+      // Store in Redis for next time (with tags for grouped invalidation)
+      await setInCache(cacheKey, posts, cacheTTL.HOME_POSTS, [
+        cacheTags.POSTS,
+        cacheTags.HOME,
+      ])
+      return posts
+    },
     ['home-posts', `page-${page}`, `limit-${limit}`],
     {
       revalidate: HOME_CACHE_REVALIDATE,
@@ -144,7 +176,10 @@ export async function getCachedHomePosts(page: number = 0, limit: number = 10): 
 /**
  * Cached version of fetchRankedPosts
  *
- * Uses unstable_cache to cache ranked posts for 5 minutes.
+ * Uses a two-layer caching strategy:
+ * 1. Redis (Upstash) - distributed cache, survives deployments
+ * 2. unstable_cache - per-instance fallback
+ *
  * Tagged with 'ranked-posts' for targeted invalidation.
  *
  * @returns Promise<Post[]> - Cached ranked posts data
@@ -152,8 +187,27 @@ export async function getCachedHomePosts(page: number = 0, limit: number = 10): 
 export async function getCachedRankedPosts(): Promise<Post[]> {
   console.log('[CachedPosts] getCachedRankedPosts called')
 
+  const cacheKey = cacheKeys.rankedPosts()
+
+  // Layer 1: Try Redis first (fastest)
+  const redisData = await getFromCache<Post[]>(cacheKey)
+  if (redisData) {
+    console.log(`[CachedPosts] Redis HIT for ${cacheKey}`)
+    return redisData
+  }
+
+  // Layer 2: Fall back to unstable_cache + Supabase
+  console.log(`[CachedPosts] Redis MISS for ${cacheKey}, fetching from Supabase`)
   const cachedFetch = unstable_cache(
-    async () => fetchRankedPosts(),
+    async () => {
+      const posts = await fetchRankedPosts()
+      // Store in Redis for next time (with tags for grouped invalidation)
+      await setInCache(cacheKey, posts, cacheTTL.RANKED_POSTS, [
+        cacheTags.POSTS,
+        cacheTags.RANKED,
+      ])
+      return posts
+    },
     ['ranked-posts'],
     {
       revalidate: RANK_CACHE_REVALIDATE,

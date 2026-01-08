@@ -1,9 +1,9 @@
 /**
  * Cached Profile Data Fetchers
  *
- * This module provides cached versions of profile fetching functions using Next.js unstable_cache.
- * These functions are designed for Server Components and reduce Supabase hits by caching
- * profile data.
+ * This module provides cached versions of profile fetching functions using:
+ * 1. Upstash Redis (distributed cache, survives deployments)
+ * 2. Next.js unstable_cache (per-instance cache, backup layer)
  *
  * IMPORTANT: unstable_cache cannot use dynamic data sources like cookies() inside the cached
  * function. We use a standalone Supabase client here since we're only reading public profile
@@ -13,13 +13,24 @@
  * - Individual profiles: 180 second cache (3 minutes)
  * - Profiles change less frequently than posts, so longer cache is appropriate
  *
+ * Data Flow:
+ * Request → Redis (fast) → unstable_cache → Supabase (slow)
+ *
  * Session-specific data like isOwner is handled in client components.
  *
  * @see https://nextjs.org/docs/app/api-reference/functions/unstable_cache
+ * @see app/utils/redis/ for Redis caching layer
  */
 
 import { unstable_cache } from "next/cache";
 import { createClient } from "@supabase/supabase-js";
+import {
+  getFromCache,
+  setInCache,
+  cacheKeys,
+  cacheTags,
+  cacheTTL,
+} from "./redis";
 
 // Cache configuration constants
 const PROFILE_CACHE_REVALIDATE = 180; // 3 minutes for profile pages
@@ -88,7 +99,10 @@ async function fetchProfileByUsername(
 /**
  * Cached version of fetchProfileByUsername
  *
- * Uses unstable_cache to cache profile for 3 minutes.
+ * Uses a two-layer caching strategy:
+ * 1. Redis (Upstash) - distributed cache, survives deployments
+ * 2. unstable_cache - per-instance fallback
+ *
  * The cache key includes the username for targeted caching.
  * Tagged with 'profiles' and 'profile-{username}' for targeted invalidation.
  *
@@ -102,10 +116,28 @@ export async function getCachedProfile(
 
   // Normalize username for consistent cache keys
   const normalizedUsername = username.toLowerCase();
+  const cacheKey = cacheKeys.profile(normalizedUsername);
 
-  // Create a cached function with username-specific cache key
+  // Layer 1: Try Redis first (fastest)
+  const redisData = await getFromCache<Profile>(cacheKey);
+  if (redisData) {
+    console.log(`[CachedProfiles] Redis HIT for ${cacheKey}`);
+    return redisData;
+  }
+
+  // Layer 2: Fall back to unstable_cache + Supabase
+  console.log(`[CachedProfiles] Redis MISS for ${cacheKey}, fetching from Supabase`);
   const cachedFetch = unstable_cache(
-    async () => fetchProfileByUsername(normalizedUsername),
+    async () => {
+      const profile = await fetchProfileByUsername(normalizedUsername);
+      // Store in Redis for next time (only if profile exists)
+      if (profile) {
+        await setInCache(cacheKey, profile, cacheTTL.PROFILE, [
+          cacheTags.PROFILES,
+        ]);
+      }
+      return profile;
+    },
     ["profile", normalizedUsername],
     {
       revalidate: PROFILE_CACHE_REVALIDATE,
