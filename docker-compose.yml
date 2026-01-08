@@ -1,0 +1,45 @@
+# Docker Compose for Local Development Services
+# This file provides local Redis for development, compatible with the Upstash client.
+#
+# Usage:
+#   docker compose up -d          # Start Redis
+#   docker compose down           # Stop Redis
+#   docker compose logs redis-http # View logs
+#
+# The serverless-redis-http (SRH) container provides an Upstash-compatible REST API
+# so the existing @upstash/redis client works without any code changes.
+
+services:
+  # Standard Redis instance
+  redis:
+    image: redis:7-alpine
+    container_name: suplatzigram-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Serverless Redis HTTP - Upstash-compatible REST API
+  # This allows the @upstash/redis client to work with local Redis
+  redis-http:
+    image: hiett/serverless-redis-http:0.0.10
+    container_name: suplatzigram-redis-http
+    ports:
+      - "8079:80"
+    environment:
+      # Connect to the redis container
+      SRH_MODE: env
+      SRH_TOKEN: local_development_token
+      SRH_CONNECTION_STRING: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis-data:
+    name: suplatzigram-redis-data

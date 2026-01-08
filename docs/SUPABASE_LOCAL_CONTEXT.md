@@ -1,5 +1,24 @@
 # Supabase Local Development Context
 
+## Quick Start (TL;DR)
+
+```bash
+# Check dependencies
+make check-deps
+
+# Start all services (Supabase + Redis)
+make up
+
+# Verify everything is running
+make status
+
+# Start the app
+make dev
+
+# When done
+make down
+```
+
 ## 1. System Architecture & Project Structure
 This project operates with a **unified structure**, where the Next.js frontend and Supabase backend configuration coexist in the same repository.
 
@@ -102,4 +121,123 @@ This generates `supabase_local_backup.sql` containing the full schema and data.
 
 ### 3. Verification
 1.  Check the Supabase Dashboard: [http://127.0.0.1:54323](http://127.0.0.1:54323)
+
+## 8. Local Redis Setup
+
+The project uses Upstash Redis for distributed caching in production. For local development, we provide a Docker-based Redis setup that is fully compatible with the Upstash client.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Your App (@upstash/redis client)                       │
+└───────────────────────────┬─────────────────────────────┘
+                            │ HTTP REST API
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│  serverless-redis-http (Upstash-compatible REST API)    │
+│  http://localhost:8079                                  │
+└───────────────────────────┬─────────────────────────────┘
+                            │ Redis Protocol
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│  Redis 7 Alpine                                         │
+│  localhost:6379                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Starting Local Redis
+
+```bash
+# Using Makefile (recommended)
+make redis-up
+
+# Or using npm scripts
+npm run redis:start
+
+# Or directly with Docker Compose
+docker compose up -d
+```
+
+### Stopping Local Redis
+
+```bash
+# Using Makefile
+make redis-down
+
+# Or using npm
+npm run redis:stop
+```
+
+### Environment Configuration
+
+Update your `.env` or `.env.local` file:
+
+```ini
+# Local Redis (via serverless-redis-http)
+UPSTASH_REDIS_REST_URL=http://localhost:8079
+UPSTASH_REDIS_REST_TOKEN=local_development_token
+```
+
+### Useful Commands
+
+```bash
+# View all available commands
+make help
+
+# Check status of all services
+make status
+
+# View Redis HTTP logs
+make redis-logs    # or: npm run redis:logs
+
+# Open Redis CLI directly
+make redis-cli     # or: npm run redis:cli
+
+# List all cached keys
+make redis-keys
+
+# Flush Redis cache
+make redis-flush
+
+# Common Redis CLI commands once inside
+KEYS *           # List all keys
+GET key_name     # Get a value
+TTL key_name     # Check time-to-live
+FLUSHDB          # Clear all keys (use with caution)
+```
+
+### Verifying Local Redis Works
+
+1. Start all services: `make up`
+2. Check status: `make status`
+3. Start the dev server: `make dev`
+4. Visit http://localhost:3000
+5. Check console logs for `[Redis] Client initialized successfully`
+6. Check for `[Redis] HIT` or `[Redis] MISS` messages
+
+### Troubleshooting
+
+**Container not starting:**
+```bash
+# Check container status
+docker compose ps
+
+# View logs for errors
+docker compose logs redis
+docker compose logs redis-http
+```
+
+**Connection refused:**
+1. Ensure Docker is running
+2. Check if port 8079 is available: `lsof -i :8079`
+3. Verify containers are healthy: `docker compose ps`
+
+**Data persistence:**
+Redis data is stored in a Docker volume `suplatzigram-redis-data`. To clear all data:
+```bash
+npm run redis:stop
+docker volume rm suplatzigram-redis-data
+npm run redis:start
+```
 
