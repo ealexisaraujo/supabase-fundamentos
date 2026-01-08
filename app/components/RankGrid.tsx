@@ -17,8 +17,8 @@
  */
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getPostsWithLikeStatus } from "../utils/posts";
 import { subscribeToPostLikes, togglePostLike } from "../utils/ratings";
 import { getSessionId } from "../utils/session";
@@ -39,6 +39,8 @@ interface RankGridProps {
 }
 
 export function RankGrid({ initialPosts }: RankGridProps) {
+  const queryClient = useQueryClient();
+
   // Debug: Log initial posts received from server
   console.log(`[RankGrid] Received ${initialPosts.length} initial ranked posts from server cache`);
 
@@ -49,11 +51,11 @@ export function RankGrid({ initialPosts }: RankGridProps) {
   const [isLiking, setIsLiking] = useState<Set<string>>(new Set());
 
   // Fetch liked status with TanStack Query caching
-  // This replaces the useEffect-based fetching with proper caching
-  const { isLoading: isLikedStatusLoading } = useQuery({
+  // Returns a Map of postId -> isLiked for efficient lookups
+  const { data: likedMap, isLoading: isLikedStatusLoading } = useQuery({
     queryKey: queryKeys.posts.ranked(sessionId),
     queryFn: async () => {
-      if (!sessionId || initialPosts.length === 0) return null;
+      if (!sessionId || initialPosts.length === 0) return new Map<string, boolean>();
 
       console.log("[RankGrid] Fetching liked status (cached query)");
       const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, {
@@ -63,24 +65,29 @@ export function RankGrid({ initialPosts }: RankGridProps) {
       });
 
       // Create a map of post ID to liked status
-      const likedMap = new Map(
+      const likedMap = new Map<string, boolean>(
         postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
       );
 
-      // Merge liked status into posts
-      setPosts(prevPosts =>
-        prevPosts.map(post => ({
-          ...post,
-          isLiked: likedMap.get(String(post.id)) || false,
-        }))
-      );
-
-      console.log("[RankGrid] Liked status merged with initial posts");
+      console.log("[RankGrid] Liked status fetched for", likedMap.size, "posts");
       return likedMap;
     },
     enabled: !!sessionId && initialPosts.length > 0,
     staleTime: 60 * 1000, // Consider fresh for 60 seconds
   });
+
+  // Derive posts with liked status using useMemo (TanStack Query best practice)
+  // This is a computed value that combines base posts with the cached likedMap
+  // No useEffect needed - the value is always in sync with its dependencies
+  const postsWithLikedStatus = useMemo(() => {
+    if (!likedMap || likedMap.size === 0) {
+      return posts;
+    }
+    return posts.map(post => ({
+      ...post,
+      isLiked: likedMap.get(String(post.id)) || false,
+    }));
+  }, [posts, likedMap]);
 
   // Track initialization state
   const isInitializing = isLikedStatusLoading && posts.length === 0;
@@ -155,6 +162,11 @@ export function RankGrid({ initialPosts }: RankGridProps) {
             }
           : prev
       );
+    } else {
+      // Invalidate TanStack Query cache to ensure fresh data on navigation
+      // This invalidates ALL posts queries so home/profile pages get fresh isLiked status
+      console.log("[RankGrid] Like successful, invalidating TanStack Query cache");
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
     }
   };
 
@@ -187,8 +199,10 @@ export function RankGrid({ initialPosts }: RankGridProps) {
     };
   }, []);
 
-  // Sort posts by likes (descending) for display
-  const sortedPosts = [...posts].sort((a, b) => b.likes - a.likes);
+  // Sort posts by likes (descending) for display, with liked status from cache
+  const sortedPosts = useMemo(() => {
+    return [...postsWithLikedStatus].sort((a, b) => b.likes - a.likes);
+  }, [postsWithLikedStatus]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -206,7 +220,7 @@ export function RankGrid({ initialPosts }: RankGridProps) {
       {/* Grid de posts */}
       <main className="max-w-2xl mx-auto p-2">
         {/* Empty state - shown when no ranked posts after initialization completes */}
-        {!isInitializing && posts.length === 0 && (
+        {!isInitializing && postsWithLikedStatus.length === 0 && (
           <div className="text-center text-foreground/50 py-16">
             <p className="text-lg">No hay posts populares aún</p>
             <p className="text-sm mt-2">
@@ -218,7 +232,7 @@ export function RankGrid({ initialPosts }: RankGridProps) {
         {/* Grid - show skeletons during init or posts when available */}
         <div className="grid grid-cols-3 gap-1">
           {/* Show skeletons during initialization when no posts */}
-          {isInitializing && posts.length === 0 &&
+          {isInitializing && postsWithLikedStatus.length === 0 &&
             Array.from({ length: 9 }).map((_, i) => (
               <RankItemSkeleton key={`skeleton-${i}`} />
             ))

@@ -46,8 +46,10 @@ function makeQueryClient() {
         // Our real-time subscriptions handle live updates
         refetchOnWindowFocus: false,
 
-        // Don't refetch on component remount if data is fresh
-        refetchOnMount: false,
+        // Refetch on component remount if data is stale
+        // This ensures fresh isLiked status after navigating between pages
+        // After invalidateQueries(), data becomes stale and will refetch on mount
+        refetchOnMount: true,
 
         // Retry failed requests once before showing error
         retry: 1,

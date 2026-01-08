@@ -18,9 +18,9 @@
  * - Liked status: Cached via TanStack Query (60s stale time)
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getPostsWithLikeStatus } from "../utils/posts";
 import { getSessionId } from "../utils/session";
 import { togglePostLike, subscribeToPostLikes } from "../utils/ratings";
@@ -38,6 +38,7 @@ interface HomeFeedProps {
 
 export function HomeFeed({ initialPosts }: HomeFeedProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Auth state from centralized provider (no per-component fetch)
   const { user, isLoading: isAuthLoading, signOut } = useAuth();
@@ -56,11 +57,11 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   const POSTS_PER_PAGE = 5;
 
   // Fetch liked status with TanStack Query caching
-  // This replaces the useEffect-based fetching with proper caching
-  const { isLoading: isLikedStatusLoading } = useQuery({
+  // Returns a Map of postId -> isLiked for efficient lookups
+  const { data: likedMap, isLoading: isLikedStatusLoading } = useQuery({
     queryKey: queryKeys.posts.liked(sessionId),
     queryFn: async () => {
-      if (!sessionId || initialPosts.length === 0) return null;
+      if (!sessionId || initialPosts.length === 0) return new Map<string, boolean>();
 
       console.log("[HomeFeed] Fetching liked status (cached query)");
       const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, {
@@ -69,24 +70,29 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
       });
 
       // Create a map of post ID to liked status
-      const likedMap = new Map(
+      const likedMap = new Map<string, boolean>(
         postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
       );
 
-      // Merge liked status into posts
-      setPosts(prevPosts =>
-        prevPosts.map(post => ({
-          ...post,
-          isLiked: likedMap.get(String(post.id)) || false,
-        }))
-      );
-
-      console.log("[HomeFeed] Liked status merged with initial posts");
+      console.log("[HomeFeed] Liked status fetched for", likedMap.size, "posts");
       return likedMap;
     },
     enabled: !!sessionId && initialPosts.length > 0,
     staleTime: 60 * 1000, // Consider fresh for 60 seconds
   });
+
+  // Derive posts with liked status using useMemo (TanStack Query best practice)
+  // This is a computed value that combines base posts with the cached likedMap
+  // No useEffect needed - the value is always in sync with its dependencies
+  const postsWithLikedStatus = useMemo(() => {
+    if (!likedMap || likedMap.size === 0) {
+      return posts;
+    }
+    return posts.map(post => ({
+      ...post,
+      isLiked: likedMap.get(String(post.id)) || false,
+    }));
+  }, [posts, likedMap]);
 
   // Track initialization state
   const isInitializing = isLikedStatusLoading && posts.length === 0;
@@ -144,6 +150,11 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
             : post
         )
       );
+    } else {
+      // Invalidate TanStack Query cache to ensure fresh data on navigation
+      // This invalidates ALL posts queries so rank/profile pages get fresh isLiked status
+      console.log("[HomeFeed] Like successful, invalidating TanStack Query cache");
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
     }
   };
 
@@ -292,13 +303,13 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
       {/* Feed de posts */}
       <main className="max-w-lg mx-auto px-4 py-6">
         <div className="flex flex-col gap-6">
-          {posts.map((post) => (
+          {postsWithLikedStatus.map((post) => (
             <PostCard key={post.id} post={post} onLike={handleLike} />
           ))}
 
           {/* Loading skeletons - shown during initialization when no posts available */}
           {/* This covers: server fetch failed, Supabase outage, or initial hydration */}
-          {isInitializing && posts.length === 0 && (
+          {isInitializing && postsWithLikedStatus.length === 0 && (
             <>
               <PostCardSkeleton />
               <PostCardSkeleton />
@@ -307,7 +318,7 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
           )}
 
           {/* Empty state - shown when initialization is complete but no posts */}
-          {!isInitializing && posts.length === 0 && (
+          {!isInitializing && postsWithLikedStatus.length === 0 && (
             <div className="text-center text-foreground/50 py-8">
               No hay posts disponibles
             </div>
@@ -322,7 +333,7 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
             </div>
           )}
 
-          {!hasMore && posts.length > 0 && (
+          {!hasMore && postsWithLikedStatus.length > 0 && (
             <div className="text-center text-foreground/50 py-8">
               No hay más posts
             </div>

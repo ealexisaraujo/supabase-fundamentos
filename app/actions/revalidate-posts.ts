@@ -26,6 +26,7 @@
 
 import { revalidateTag, revalidatePath } from "next/cache";
 import { CACHE_TAGS } from "../utils/cached-posts";
+import { PROFILE_CACHE_TAGS } from "../utils/cached-profiles";
 import { invalidateCacheByTag, cacheTags } from "../utils/redis";
 
 // Cache profile for revalidation - use "default" for standard behavior
@@ -55,10 +56,14 @@ export async function revalidatePostsCache(): Promise<{
     await invalidateCacheByTag(cacheTags.POSTS);
     await invalidateCacheByTag(cacheTags.HOME);
     await invalidateCacheByTag(cacheTags.RANKED);
+    // Also invalidate profiles cache since they contain post likes count
+    await invalidateCacheByTag(cacheTags.PROFILES);
 
     // Layer 2: Revalidate Next.js Data Cache tags
     revalidateTag(CACHE_TAGS.POSTS, CACHE_PROFILE);
     revalidateTag(CACHE_TAGS.HOME_POSTS, CACHE_PROFILE);
+    // Also revalidate profiles cache for updated likes count on profile pages
+    revalidateTag(PROFILE_CACHE_TAGS.PROFILES, CACHE_PROFILE);
 
     // Layer 3: Purge Router Cache for affected pages
     // This is critical for client-side navigation to show fresh data
@@ -66,12 +71,12 @@ export async function revalidatePostsCache(): Promise<{
     revalidatePath("/rank");
 
     console.log(
-      `[Server Action] Cache revalidated for paths: /, /rank and tags: ${CACHE_TAGS.POSTS} (Redis + Data Cache)`
+      `[Server Action] Cache revalidated for paths: /, /rank and tags: ${CACHE_TAGS.POSTS}, ${PROFILE_CACHE_TAGS.PROFILES} (Redis + Data Cache)`
     );
 
     return {
       success: true,
-      revalidatedTags: [CACHE_TAGS.POSTS, CACHE_TAGS.HOME_POSTS],
+      revalidatedTags: [CACHE_TAGS.POSTS, CACHE_TAGS.HOME_POSTS, PROFILE_CACHE_TAGS.PROFILES],
     };
   } catch (error) {
     console.error("[Server Action] Error revalidating cache:", error);
