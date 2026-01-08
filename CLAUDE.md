@@ -36,12 +36,17 @@ npm run lint         # Run ESLint
 - **Testing:** Vitest + React Testing Library
 
 ### App Structure (`app/`)
-- `page.tsx` - Home feed Server Component (fetches cached posts)
-- `post/page.tsx` - Create new post page
+- `page.tsx` - Home feed Server Component (fetches cached posts with profile joins)
+- `post/page.tsx` - Protected post creation (Server Component with auth check)
+- `post/PostForm.tsx` - Post creation form (Client Component)
 - `rank/page.tsx` - Ranking page Server Component (fetches cached ranked posts)
-- `profile/[username]/` - User profile pages with server-side caching
+- `auth/login/` - Login page
+- `auth/register/` - Registration page
+- `profile/[username]/` - User profile pages with posts wall
+- `profile/[username]/ProfileWall.tsx` - Grid display of user's posts
+- `profile/create/` - Profile setup for new users
 - `actions/` - Server Actions for cache revalidation
-- `components/` - Reusable UI components (BottomNav, CommentsSection, HomeFeed, RankGrid)
+- `components/` - Reusable UI components (BottomNav, CommentsSection, HomeFeed, RankGrid, PostCard)
 - `providers/` - React Context providers (AuthProvider, QueryProvider)
 - `utils/` - Supabase client and data fetching utilities
 - `utils/redis/` - Upstash Redis client and cache utilities
@@ -53,9 +58,34 @@ npm run lint         # Run ESLint
 - **Client (browser):** `app/utils/client.ts` - Single Supabase client instance for client components
 - **Client (server):** `app/utils/supabase/server.ts` - SSR-compatible Supabase client
 - **Middleware:** `middleware.ts` - Auth session refresh on every request
-- **Tables:** `posts_new`, `post_ratings`, `comments`, `profiles`
+- **Tables:** `posts_new` (with profile_id FK), `post_ratings`, `comments`, `profiles`
 - **Real-time:** Subscriptions for live like counts (`ratings.ts`)
 - **Storage:** Image uploads for posts and avatars
+
+### Authenticated Post Creation
+Posts can be created by authenticated users and are associated with their profile:
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  auth.users  │────<│   profiles   │────<│  posts_new   │
+│              │  1:1│              │  1:N│              │
+│  id (PK)     │     │  id (PK)     │     │  id (PK)     │
+│  email       │     │  user_id(FK) │     │  profile_id  │
+│              │     │  username    │     │  user_id(FK) │
+│              │     │  avatar_url  │     │  image_url   │
+│              │     │  bio         │     │  caption     │
+└──────────────┘     └──────────────┘     │  likes       │
+                                          │  created_at  │
+                                          └──────────────┘
+```
+
+**User Flow:**
+- Anonymous users: Can view posts/profiles, can like (via session_id), cannot create posts
+- Authenticated users: Full access, posts are associated with their profile
+- Profile wall: User's posts appear on their profile page (`/profile/[username]`)
+
+**Protected Routes:**
+- `/post` - Requires authentication, redirects to login if anonymous
 
 ### Caching Architecture (Three-Layer Strategy)
 
@@ -149,6 +179,7 @@ npx vitest run tests/comments.test.ts
 - Next.js `unstable_cache` for server-side data caching
 
 ## Recent Changes
+- 005-authenticated-posts: Implemented authenticated post creation with user profile association. Posts are now linked to profiles via `profile_id` FK. Protected `/post` route requires auth. Profile wall displays user's posts. Home feed shows post authors with profile links. BottomNav is auth-aware. Added `PostForm.tsx`, `ProfileWall.tsx`. Updated PostCard to show author info from joined profile data.
 - 004-redis-caching: Implemented Upstash Redis caching layer as distributed cache. Added `utils/redis/` with client and cache utilities. Integrated Redis with cached-posts.ts and cached-profiles.ts. Updated cache invalidation in server actions. Graceful degradation when Redis not configured.
 - 003-client-caching: Implemented TanStack Query and AuthProvider for client-side caching. Reduced duplicate API calls during navigation. Added `app/providers/` with QueryProvider, AuthProvider. Refactored HomeFeed, RankGrid, ProfileClientPage to use `useQuery` and `useAuth` hooks.
 - 002-caching-optimization: Implemented hybrid Server Component + Client Component architecture with `unstable_cache` for reducing Supabase hits. Added `@supabase/ssr` package, server-side Supabase client, cached data fetchers, and cache revalidation via Server Actions.

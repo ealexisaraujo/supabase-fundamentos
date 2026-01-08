@@ -53,6 +53,20 @@ export interface Profile {
   website: string | null;
   created_at?: string;
   updated_at?: string;
+  // User's posts (populated when fetching with posts)
+  posts?: ProfilePost[];
+  post_count?: number;
+}
+
+/**
+ * Simplified post type for profile wall display
+ */
+export interface ProfilePost {
+  id: string;
+  image_url: string;
+  caption: string;
+  likes: number;
+  created_at: string;
 }
 
 /**
@@ -139,6 +153,99 @@ export async function getCachedProfile(
       return profile;
     },
     ["profile", normalizedUsername],
+    {
+      revalidate: PROFILE_CACHE_REVALIDATE,
+      tags: ["profiles", `profile-${normalizedUsername}`],
+    }
+  );
+
+  return cachedFetch();
+}
+
+/**
+ * Fetches a profile with user's posts from Supabase by username
+ * This is the raw fetch function that will be wrapped with unstable_cache
+ */
+async function fetchProfileWithPosts(
+  username: string
+): Promise<Profile | null> {
+  console.log(`[CachedProfiles] Fetching profile with posts for: ${username}`);
+
+  const supabase = getSupabaseClient();
+
+  // First fetch the profile
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, username, full_name, avatar_url, bio, website, created_at, updated_at")
+    .eq("username", username)
+    .single();
+
+  if (profileError) {
+    if (profileError.code === "PGRST116") {
+      console.log(`[CachedProfiles] Profile not found for username: ${username}`);
+      return null;
+    }
+    console.error("[CachedProfiles] Error fetching profile:", profileError);
+    return null;
+  }
+
+  // Then fetch user's posts using the profile id
+  const { data: posts, error: postsError } = await supabase
+    .from("posts_new")
+    .select("id, image_url, caption, likes, created_at")
+    .eq("profile_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (postsError) {
+    console.error("[CachedProfiles] Error fetching user posts:", postsError);
+  }
+
+  console.log(`[CachedProfiles] Fetched profile with ${posts?.length || 0} posts for ${username}`);
+
+  return {
+    ...profile,
+    posts: posts || [],
+    post_count: posts?.length || 0,
+  };
+}
+
+/**
+ * Cached version of fetchProfileWithPosts
+ *
+ * Fetches a profile along with the user's posts for the profile wall.
+ *
+ * @param username - The username to fetch
+ * @returns Promise<Profile | null> - Cached profile with posts or null if not found
+ */
+export async function getCachedProfileWithPosts(
+  username: string
+): Promise<Profile | null> {
+  console.log(`[CachedProfiles] getCachedProfileWithPosts called for: ${username}`);
+
+  const normalizedUsername = username.toLowerCase();
+  const cacheKey = `${cacheKeys.profile(normalizedUsername)}:with-posts`;
+
+  // Layer 1: Try Redis first
+  const redisData = await getFromCache<Profile>(cacheKey);
+  if (redisData) {
+    console.log(`[CachedProfiles] Redis HIT for ${cacheKey}`);
+    return redisData;
+  }
+
+  // Layer 2: Fall back to unstable_cache + Supabase
+  console.log(`[CachedProfiles] Redis MISS for ${cacheKey}, fetching from Supabase`);
+  const cachedFetch = unstable_cache(
+    async () => {
+      const profile = await fetchProfileWithPosts(normalizedUsername);
+      if (profile) {
+        await setInCache(cacheKey, profile, cacheTTL.PROFILE, [
+          cacheTags.PROFILES,
+        ]);
+      }
+      return profile;
+    },
+    ["profile-with-posts", normalizedUsername],
     {
       revalidate: PROFILE_CACHE_REVALIDATE,
       tags: ["profiles", `profile-${normalizedUsername}`],

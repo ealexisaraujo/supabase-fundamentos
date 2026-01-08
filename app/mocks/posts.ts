@@ -10,6 +10,15 @@ export interface Post {
   isLiked?: boolean;
   created_at: Date;
   updated_at?: Date;
+  // New fields for authenticated post creation
+  user_id?: string | null;
+  profile_id?: string | null;
+  // Joined profile data (populated when fetching with joins)
+  profile?: {
+    username: string;
+    avatar_url: string | null;
+    full_name: string | null;
+  } | null;
 }
 
 // Lista unificada de posts para home y ranking

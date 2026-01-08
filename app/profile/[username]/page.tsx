@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getCachedProfile } from "../../utils/cached-profiles";
+import { getCachedProfileWithPosts } from "../../utils/cached-profiles";
 import ProfileClientPage from "./ProfileClientPage";
 
 /**
@@ -13,7 +13,7 @@ import ProfileClientPage from "./ProfileClientPage";
  * - Cache tags: 'profiles', 'profile-{username}'
  * - Invalidation: Via revalidateProfileCache() after profile updates
  *
- * What's cached: Profile data (username, full_name, bio, website, avatar_url)
+ * What's cached: Profile data + user's posts
  * What's client-side: isOwner check (requires auth session)
  *
  * @see app/utils/cached-profiles.ts for caching implementation
@@ -27,10 +27,10 @@ export default async function ProfilePage({
   const resolvedParams = await params;
   const username = resolvedParams.username;
 
-  // Fetch cached profile data
+  // Fetch cached profile data with posts
   // This uses unstable_cache with a standalone Supabase client
   // (no cookies needed since profiles have public read access)
-  const profile = await getCachedProfile(username);
+  const profile = await getCachedProfileWithPosts(username);
 
   if (!profile) {
     notFound();

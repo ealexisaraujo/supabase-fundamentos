@@ -77,9 +77,17 @@ async function fetchHomePosts(page: number = 0, limit: number = 10): Promise<Pos
   const from = page * limit
   const to = from + limit - 1
 
+  // Fetch posts with joined profile data for authenticated posts
   const { data, error } = await supabase
     .from('posts_new')
-    .select('id, image_url, caption, likes, user, user_id, created_at')
+    .select(`
+      id, image_url, caption, likes, user, user_id, profile_id, created_at,
+      profile:profiles (
+        username,
+        avatar_url,
+        full_name
+      )
+    `)
     .order('created_at', { ascending: false })
     .range(from, to)
 
@@ -88,8 +96,15 @@ async function fetchHomePosts(page: number = 0, limit: number = 10): Promise<Pos
     return []
   }
 
-  console.log(`[CachedPosts] Fetched ${data?.length || 0} home posts from Supabase`)
-  return data || []
+  // Transform the data to ensure profile is a single object (not array)
+  // Supabase returns joined data that may be array or object depending on relationship
+  const posts = (data || []).map(post => ({
+    ...post,
+    profile: Array.isArray(post.profile) ? post.profile[0] || null : post.profile
+  }))
+
+  console.log(`[CachedPosts] Fetched ${posts.length} home posts from Supabase`)
+  return posts
 }
 
 /**
@@ -110,9 +125,17 @@ async function fetchRankedPosts(): Promise<Post[]> {
 
   const supabase = getSupabaseClient()
 
+  // Fetch ranked posts with joined profile data
   const { data, error } = await supabase
     .from('posts_new')
-    .select('id, image_url, caption, likes, user, user_id, created_at')
+    .select(`
+      id, image_url, caption, likes, user, user_id, profile_id, created_at,
+      profile:profiles (
+        username,
+        avatar_url,
+        full_name
+      )
+    `)
     .gt('likes', 5)
     .order('likes', { ascending: false })
 
@@ -121,8 +144,14 @@ async function fetchRankedPosts(): Promise<Post[]> {
     return []
   }
 
-  console.log(`[CachedPosts] Fetched ${data?.length || 0} ranked posts from Supabase`)
-  return data || []
+  // Transform the data to ensure profile is a single object (not array)
+  const posts = (data || []).map(post => ({
+    ...post,
+    profile: Array.isArray(post.profile) ? post.profile[0] || null : post.profile
+  }))
+
+  console.log(`[CachedPosts] Fetched ${posts.length} ranked posts from Supabase`)
+  return posts
 }
 
 /**

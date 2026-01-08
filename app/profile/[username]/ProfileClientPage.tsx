@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ProfileClientPage - User Profile Display
+ * ProfileClientPage - User Profile Display with Posts Wall
  *
  * This component displays user profiles with edit functionality for owners.
  * Auth state is managed by AuthProvider (useAuth hook) instead of per-component fetch.
@@ -13,11 +13,13 @@
 import { useState } from "react";
 import Image from "next/image";
 import ProfileEditForm from "../../components/ProfileEditForm";
+import ProfileWall from "./ProfileWall";
 import { ThemeToggle } from "../../components/ThemeToggle";
-import { UserIcon, BackIcon, CameraIcon } from "../../components/icons";
+import { UserIcon, BackIcon, CameraIcon, GridIcon } from "../../components/icons";
 import { Button } from "../../components/Button";
 import { shouldSkipImageOptimization } from "../../utils/image";
 import { useAuth } from "../../providers";
+import type { Profile as ProfileType, ProfilePost } from "../../utils/cached-profiles";
 
 interface Profile {
   id: string;
@@ -26,6 +28,8 @@ interface Profile {
   avatar_url: string | null;
   bio: string | null;
   website: string | null;
+  posts?: ProfilePost[];
+  post_count?: number;
 }
 
 export default function ProfileClientPage({ initialProfile }: { initialProfile: Profile }) {
@@ -140,14 +144,22 @@ export default function ProfileClientPage({ initialProfile }: { initialProfile: 
           )}
         </div>
 
-        {/* Placeholder for user posts */}
-        <div className="border-t border-border pt-8">
-          <div className="flex items-center justify-center gap-2 text-foreground/40 pb-8">
-            <div className="w-4 h-4 rounded-full border border-current" />
-            <div className="w-4 h-4 rounded-full border border-current" />
-            <div className="w-4 h-4 rounded-full border border-current" />
+        {/* User Posts Wall */}
+        <div className="border-t border-border pt-6">
+          {/* Posts header with count */}
+          <div className="flex items-center justify-center gap-2 text-foreground/60 mb-6">
+            <GridIcon className="w-5 h-5" />
+            <span className="text-sm font-medium uppercase tracking-wider">
+              {profile.post_count || 0} {profile.post_count === 1 ? 'publicacion' : 'publicaciones'}
+            </span>
           </div>
-          <p className="text-center text-foreground/40">No posts yet (coming soon)</p>
+
+          {/* Posts grid */}
+          <ProfileWall
+            posts={profile.posts || []}
+            username={profile.username}
+            isOwner={isOwner}
+          />
         </div>
       </main>
     </div>

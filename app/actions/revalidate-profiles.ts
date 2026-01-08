@@ -20,6 +20,7 @@
 
 import { revalidateTag, revalidatePath } from "next/cache";
 import { PROFILE_CACHE_TAGS } from "../utils/cached-profiles";
+import { invalidateCache, cacheTags } from "../utils/redis";
 
 // Cache profile for revalidation - use "default" for standard behavior
 const CACHE_PROFILE = "default";
@@ -50,13 +51,16 @@ export async function revalidateProfileCache(username: string): Promise<{
   );
 
   try {
-    // Revalidate the specific profile tag (Data Cache)
+    // Layer 1: Invalidate Redis cache (both profile and profile-with-posts)
+    await invalidateCache(`profile:${normalizedUsername}*`);
+
+    // Layer 2: Revalidate the specific profile tag (Data Cache)
     revalidateTag(profileTag, CACHE_PROFILE);
 
     // Also revalidate the global profiles tag for any lists
     revalidateTag(PROFILE_CACHE_TAGS.PROFILES, CACHE_PROFILE);
 
-    // Purge Router Cache for the profile page
+    // Layer 3: Purge Router Cache for the profile page
     // This ensures client-side navigation shows fresh data
     revalidatePath(`/profile/${normalizedUsername}`);
 

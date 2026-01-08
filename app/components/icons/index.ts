@@ -11,5 +11,6 @@ export { CameraIcon } from './CameraIcon';
 export { CheckIcon } from './CheckIcon';
 export { LoadingIcon } from './LoadingIcon';
 export { ErrorIcon } from './ErrorIcon';
+export { GridIcon } from './GridIcon';
 
 
