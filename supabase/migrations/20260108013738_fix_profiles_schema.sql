@@ -1,3 +1,6 @@
+-- Migration applied directly in production
+-- This file is a placeholder to sync migration history
+
 -- Create profiles table
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid REFERENCES auth.users ON DELETE CASCADE NOT NULL PRIMARY KEY,
@@ -7,8 +10,11 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   website text,
   bio text,
   created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+  updated_at timestamp with time zone
 );
+
+-- Ensure username has minimum length
+ALTER TABLE public.profiles ADD CONSTRAINT username_length CHECK (char_length(username) >= 3);
 
 -- Enable RLS
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -35,6 +41,3 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER on_profiles_updated
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
-
--- Create a secure bucket for avatars if it doesn't exist (assuming 'images' bucket exists from previous migrations, but might need specific folder or public access)
--- Checking existing storage policies is a good idea, but for now we rely on the existing 'images' bucket mentioned in migrations.

@@ -1,3 +1,6 @@
+-- Migration applied directly in production
+-- This file is a placeholder to sync migration history
+
 -- Fix storage policies for images_platzi bucket
 -- The previous policies only targeted 'anon' role which caused RLS violations
 -- This migration updates policies to target 'public' role (includes both anon and authenticated)
