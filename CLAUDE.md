@@ -31,14 +31,17 @@ npm run lint         # Run ESLint
 - **Framework:** Next.js 16 (App Router, React 19)
 - **Backend:** Supabase (database, storage, real-time)
 - **Styling:** Tailwind CSS v4
+- **State Management:** TanStack Query (client-side caching)
 - **Testing:** Vitest + React Testing Library
 
 ### App Structure (`app/`)
 - `page.tsx` - Home feed Server Component (fetches cached posts)
 - `post/page.tsx` - Create new post page
 - `rank/page.tsx` - Ranking page Server Component (fetches cached ranked posts)
+- `profile/[username]/` - User profile pages with server-side caching
 - `actions/` - Server Actions for cache revalidation
 - `components/` - Reusable UI components (BottomNav, CommentsSection, HomeFeed, RankGrid)
+- `providers/` - React Context providers (AuthProvider, QueryProvider)
 - `utils/` - Supabase client and data fetching utilities
 - `utils/supabase/` - Server-side Supabase client utilities
 - `mocks/` - Mock data for testing and fallback
@@ -47,28 +50,48 @@ npm run lint         # Run ESLint
 ### Supabase Integration
 - **Client (browser):** `app/utils/client.ts` - Single Supabase client instance for client components
 - **Client (server):** `app/utils/supabase/server.ts` - SSR-compatible Supabase client
-- **Tables:** `posts_new`, `post_ratings`, `comments`
+- **Middleware:** `middleware.ts` - Auth session refresh on every request
+- **Tables:** `posts_new`, `post_ratings`, `comments`, `profiles`
 - **Real-time:** Subscriptions for live like counts (`ratings.ts`)
-- **Storage:** Image uploads for posts
+- **Storage:** Image uploads for posts and avatars
 
-### Caching Architecture
-The app uses a hybrid Server Component + Client Component pattern for optimal performance:
+### Caching Architecture (Hybrid Server + Client)
 
-- **Server Components** (`page.tsx`, `rank/page.tsx`): Fetch and cache initial data using `unstable_cache`
-- **Client Components** (`HomeFeed`, `RankGrid`): Handle interactivity, real-time updates, infinite scroll
-- **Cache invalidation:** Server Actions with `revalidateTag()` after mutations
+The app uses a two-layer caching strategy:
 
-Cache configuration (in `app/utils/cached-posts.ts`):
-| Page | Cache Duration | Tags |
-|------|----------------|------|
-| Home | 60 seconds | `posts`, `home-posts` |
-| Ranking | 5 minutes | `posts`, `ranked-posts` |
+**1. Server-Side Caching** (unstable_cache):
+- `utils/cached-posts.ts` - Home/Ranked posts (60s/5min cache)
+- `utils/cached-profiles.ts` - Profile pages (3min cache)
+- Invalidated via Server Actions with `revalidateTag()`
+
+**2. Client-Side Caching** (TanStack Query + AuthProvider):
+- `providers/QueryProvider.tsx` - Configures TanStack Query (60s stale time)
+- `providers/AuthProvider.tsx` - Single `onAuthStateChange` listener
+- Prevents duplicate API calls during navigation
+
+| Layer | Data | Duration | Invalidation |
+|-------|------|----------|--------------|
+| Server | Posts | 60s-5min | `revalidateTag()` |
+| Server | Profiles | 3min | `revalidateTag()` |
+| Client | Liked status | 60s stale | TanStack Query |
+| Client | Auth state | Event-driven | Supabase listener |
+
+### Providers Structure
+```tsx
+// app/layout.tsx wraps everything with:
+<Providers>          {/* QueryProvider + AuthProvider */}
+  <ThemeProvider>
+    {children}
+  </ThemeProvider>
+</Providers>
+```
 
 ### Data Flow Pattern
 The app uses a mock/production toggle via `NEXT_PUBLIC_USE_MOCKS` env var. Utility functions in `app/utils/` check this flag and return mock data or query Supabase.
 
 ### Session Management
-Anonymous sessions are managed via localStorage with `session-id` key. Used for tracking likes without authentication.
+- **Anonymous:** localStorage `session-id` key for tracking likes without auth
+- **Authenticated:** Supabase auth with `AuthProvider` context for centralized state
 
 ## Environment Variables
 
@@ -97,10 +120,15 @@ npx vitest run tests/comments.test.ts
 ```
 
 ## Active Technologies
-- TypeScript 5.x with React 19 / Next.js 16 + Next.js 16.1.1, React 19.2.0, Tailwind CSS v4, @supabase/supabase-js, @supabase/ssr
-- Supabase (PostgreSQL) for posts, ratings, comments; Supabase Storage for images
+- TypeScript 5.x with React 19 / Next.js 16.1.1, React 19.2.0
+- Tailwind CSS v4
+- @supabase/supabase-js, @supabase/ssr
+- @tanstack/react-query (TanStack Query) for client-side caching
+- Supabase (PostgreSQL) for posts, ratings, comments, profiles
+- Supabase Storage for images and avatars
 - Next.js `unstable_cache` for server-side data caching
 
 ## Recent Changes
+- 003-client-caching: Implemented TanStack Query and AuthProvider for client-side caching. Reduced duplicate API calls during navigation. Added `app/providers/` with QueryProvider, AuthProvider. Refactored HomeFeed, RankGrid, ProfileClientPage to use `useQuery` and `useAuth` hooks.
 - 002-caching-optimization: Implemented hybrid Server Component + Client Component architecture with `unstable_cache` for reducing Supabase hits. Added `@supabase/ssr` package, server-side Supabase client, cached data fetchers, and cache revalidation via Server Actions.
 - 001-tailwind-ui-refactor: Added TypeScript 5.x with React 19 / Next.js 16 + Next.js 16.1.1, React 19.2.0, Tailwind CSS v4, @supabase/supabase-js

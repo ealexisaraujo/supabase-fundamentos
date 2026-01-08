@@ -8,15 +8,19 @@
  * - Handling like/unlike interactions
  * - Real-time subscription for like count updates
  * - Infinite scroll for loading more posts
- * - User authentication state
+ * - User authentication state (via AuthProvider)
  *
  * The initial posts are passed as props from the Server Component,
  * which uses cached data to reduce Supabase hits.
+ *
+ * Client-side caching:
+ * - Auth state: Managed by AuthProvider (single listener, no per-component fetch)
+ * - Liked status: Cached via TanStack Query (60s stale time)
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { User } from "@supabase/supabase-js";
+import { useQuery } from "@tanstack/react-query";
 import { getPostsWithLikeStatus } from "../utils/posts";
 import { getSessionId } from "../utils/session";
 import { togglePostLike, subscribeToPostLikes } from "../utils/ratings";
@@ -25,7 +29,7 @@ import { PostCard } from "./PostCard";
 import { PostCardSkeleton } from "./Skeletons";
 import { ThemeToggle } from "./ThemeToggle";
 import Link from "next/link";
-import { supabase } from "../utils/client";
+import { useAuth, queryKeys } from "../providers";
 
 interface HomeFeedProps {
   /** Initial posts from server-side cached fetch */
@@ -34,24 +38,58 @@ interface HomeFeedProps {
 
 export function HomeFeed({ initialPosts }: HomeFeedProps) {
   const router = useRouter();
+
+  // Auth state from centralized provider (no per-component fetch)
+  const { user, isLoading: isAuthLoading, signOut } = useAuth();
+
   // Debug: Log initial posts received from server
   console.log(`[HomeFeed] Received ${initialPosts.length} initial posts from server cache`);
 
   // Initialize posts with server-provided data
   const [posts, setPosts] = useState<Post[]>(initialPosts);
-  const [sessionId, setSessionId] = useState<string>("");
+  const [sessionId, setSessionId] = useState<string>(() => getSessionId());
   const [isLiking, setIsLiking] = useState<Set<string>>(new Set());
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
-  // Track if auth state is being loaded - prevents Login button flash
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  // Track if we're still initializing (fetching liked status)
-  // This helps show skeletons during brief loading periods or on errors
-  const [isInitializing, setIsInitializing] = useState(true);
   const observerTarget = useRef<HTMLDivElement>(null);
   const POSTS_PER_PAGE = 5;
+
+  // Fetch liked status with TanStack Query caching
+  // This replaces the useEffect-based fetching with proper caching
+  const { isLoading: isLikedStatusLoading } = useQuery({
+    queryKey: queryKeys.posts.liked(sessionId),
+    queryFn: async () => {
+      if (!sessionId || initialPosts.length === 0) return null;
+
+      console.log("[HomeFeed] Fetching liked status (cached query)");
+      const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, {
+        page: 0,
+        limit: initialPosts.length,
+      });
+
+      // Create a map of post ID to liked status
+      const likedMap = new Map(
+        postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
+      );
+
+      // Merge liked status into posts
+      setPosts(prevPosts =>
+        prevPosts.map(post => ({
+          ...post,
+          isLiked: likedMap.get(String(post.id)) || false,
+        }))
+      );
+
+      console.log("[HomeFeed] Liked status merged with initial posts");
+      return likedMap;
+    },
+    enabled: !!sessionId && initialPosts.length > 0,
+    staleTime: 60 * 1000, // Consider fresh for 60 seconds
+  });
+
+  // Track initialization state
+  const isInitializing = isLikedStatusLoading && posts.length === 0;
 
   /**
    * Handles like/unlike toggle for a post
@@ -146,59 +184,10 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
     }
   }, [sessionId]);
 
-  /**
-   * Initialize session and merge liked status with initial posts
-   * The server-provided posts don't have isLiked status (session-specific),
-   * so we fetch that on the client side
-   */
-  useEffect(() => {
-    const initializeSession = async () => {
-      console.log("[HomeFeed] Initializing session and liked status");
-
-      // Get or create session ID
-      const sid = getSessionId();
-      setSessionId(sid);
-
-      if (!sid || initialPosts.length === 0) {
-        setIsInitializing(false);
-        return;
-      }
-
-      // Fetch liked status for initial posts
-      try {
-        const postsWithLikeStatus = await getPostsWithLikeStatus(sid, {
-          page: 0,
-          limit: initialPosts.length,
-        });
-
-        // Create a map of post ID to liked status
-        const likedMap = new Map(
-          postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
-        );
-
-        // Merge liked status into our posts
-        setPosts(prevPosts =>
-          prevPosts.map(post => ({
-            ...post,
-            isLiked: likedMap.get(String(post.id)) || false,
-          }))
-        );
-
-        console.log("[HomeFeed] Liked status merged with initial posts");
-      } catch (error) {
-        console.error("[HomeFeed] Error fetching liked status:", error);
-      } finally {
-        setIsInitializing(false);
-      }
-
-      // Check for user session
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      setIsAuthLoading(false);
-    };
-
-    initializeSession();
-  }, [initialPosts]);
+  // Note: Session initialization and liked status fetching is now handled by:
+  // - sessionId: initialized with getSessionId() in useState
+  // - liked status: fetched via useQuery with caching
+  // - auth state: managed by AuthProvider (useAuth hook)
 
   // Infinite scroll observer
   useEffect(() => {
@@ -280,8 +269,7 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
                 </div>
                 <button
                   onClick={async () => {
-                    await supabase.auth.signOut();
-                    setUser(null);
+                    await signOut();
                     router.refresh();
                   }}
                   className="px-4 py-1.5 rounded-full text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100 transition-colors border border-red-200"

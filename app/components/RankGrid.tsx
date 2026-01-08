@@ -11,10 +11,14 @@
  *
  * The initial posts are passed as props from the Server Component,
  * which uses cached data (5 minute cache) to reduce Supabase hits.
+ *
+ * Client-side caching:
+ * - Liked status: Cached via TanStack Query (60s stale time)
  */
 
 import Image from "next/image";
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getPostsWithLikeStatus } from "../utils/posts";
 import { subscribeToPostLikes, togglePostLike } from "../utils/ratings";
 import { getSessionId } from "../utils/session";
@@ -23,6 +27,7 @@ import { PostModal } from "./PostModal";
 import { RankItemSkeleton } from "./Skeletons";
 import { HeartIcon } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
+import { queryKeys } from "../providers";
 
 // Base64 gray placeholder for loading images
 const BLUR_DATA_URL =
@@ -40,11 +45,45 @@ export function RankGrid({ initialPosts }: RankGridProps) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   // Initialize posts with server-provided data
   const [posts, setPosts] = useState<Post[]>(initialPosts);
-  const [sessionId, setSessionId] = useState<string>("");
+  const [sessionId, setSessionId] = useState<string>(() => getSessionId());
   const [isLiking, setIsLiking] = useState<Set<string>>(new Set());
-  // Track if we're still initializing (fetching liked status)
-  // This helps show skeletons during brief loading periods
-  const [isInitializing, setIsInitializing] = useState(true);
+
+  // Fetch liked status with TanStack Query caching
+  // This replaces the useEffect-based fetching with proper caching
+  const { isLoading: isLikedStatusLoading } = useQuery({
+    queryKey: queryKeys.posts.ranked(sessionId),
+    queryFn: async () => {
+      if (!sessionId || initialPosts.length === 0) return null;
+
+      console.log("[RankGrid] Fetching liked status (cached query)");
+      const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, {
+        minLikes: 5,
+        orderBy: "likes",
+        ascending: false,
+      });
+
+      // Create a map of post ID to liked status
+      const likedMap = new Map(
+        postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
+      );
+
+      // Merge liked status into posts
+      setPosts(prevPosts =>
+        prevPosts.map(post => ({
+          ...post,
+          isLiked: likedMap.get(String(post.id)) || false,
+        }))
+      );
+
+      console.log("[RankGrid] Liked status merged with initial posts");
+      return likedMap;
+    },
+    enabled: !!sessionId && initialPosts.length > 0,
+    staleTime: 60 * 1000, // Consider fresh for 60 seconds
+  });
+
+  // Track initialization state
+  const isInitializing = isLikedStatusLoading && posts.length === 0;
 
   /**
    * Handles like/unlike toggle for a post
@@ -119,55 +158,9 @@ export function RankGrid({ initialPosts }: RankGridProps) {
     }
   };
 
-  /**
-   * Initialize session and merge liked status with initial posts
-   * The server-provided posts don't have isLiked status (session-specific),
-   * so we fetch that on the client side
-   */
-  useEffect(() => {
-    const initializeSession = async () => {
-      console.log("[RankGrid] Initializing session and liked status");
-
-      // Get or create session ID
-      const sid = getSessionId();
-      setSessionId(sid);
-
-      if (!sid || initialPosts.length === 0) {
-        setIsInitializing(false);
-        return;
-      }
-
-      // Fetch liked status for initial posts
-      try {
-        const postsWithLikeStatus = await getPostsWithLikeStatus(sid, {
-          minLikes: 5,
-          orderBy: "likes",
-          ascending: false,
-        });
-
-        // Create a map of post ID to liked status
-        const likedMap = new Map(
-          postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
-        );
-
-        // Merge liked status into our posts
-        setPosts(prevPosts =>
-          prevPosts.map(post => ({
-            ...post,
-            isLiked: likedMap.get(String(post.id)) || false,
-          }))
-        );
-
-        console.log("[RankGrid] Liked status merged with initial posts");
-      } catch (error) {
-        console.error("[RankGrid] Error fetching liked status:", error);
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    initializeSession();
-  }, [initialPosts]);
+  // Note: Session initialization and liked status fetching is now handled by:
+  // - sessionId: initialized with getSessionId() in useState
+  // - liked status: fetched via useQuery with caching
 
   // Subscribe to real-time updates for like counts
   useEffect(() => {

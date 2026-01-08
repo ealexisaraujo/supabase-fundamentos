@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+/**
+ * ProfileClientPage - User Profile Display
+ *
+ * This component displays user profiles with edit functionality for owners.
+ * Auth state is managed by AuthProvider (useAuth hook) instead of per-component fetch.
+ *
+ * Client-side caching:
+ * - Auth state: Managed by AuthProvider (single listener, no per-component fetch)
+ */
+
+import { useState } from "react";
 import Image from "next/image";
-import { supabase } from "../../utils/client";
 import ProfileEditForm from "../../components/ProfileEditForm";
 import { ThemeToggle } from "../../components/ThemeToggle";
 import { UserIcon, BackIcon, CameraIcon } from "../../components/icons";
 import { Button } from "../../components/Button";
 import { shouldSkipImageOptimization } from "../../utils/image";
+import { useAuth } from "../../providers";
 
 interface Profile {
   id: string;
@@ -20,18 +30,13 @@ interface Profile {
 
 export default function ProfileClientPage({ initialProfile }: { initialProfile: Profile }) {
   const [profile, setProfile] = useState(initialProfile);
-  const [isOwner, setIsOwner] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
-  useEffect(() => {
-    const checkOwner = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && user.id === profile.id) {
-        setIsOwner(true);
-      }
-    };
-    checkOwner();
-  }, [profile.id]);
+  // Get auth state from centralized provider (no per-component fetch)
+  const { user, isLoading: isAuthLoading } = useAuth();
+
+  // Determine if current user is the profile owner
+  const isOwner = !isAuthLoading && user?.id === profile.id;
 
   if (isEditing) {
     return (
