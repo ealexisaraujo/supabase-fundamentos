@@ -8,5 +8,8 @@ export { CloseIcon } from './CloseIcon';
 export { BackIcon } from './BackIcon';
 export { UserIcon } from './UserIcon';
 export { CameraIcon } from './CameraIcon';
+export { CheckIcon } from './CheckIcon';
+export { LoadingIcon } from './LoadingIcon';
+export { ErrorIcon } from './ErrorIcon';
 
 
