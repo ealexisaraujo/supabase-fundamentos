@@ -58,11 +58,14 @@ const queryClient = new QueryClient({
       staleTime: 60 * 1000,      // Data fresh for 60 seconds
       gcTime: 5 * 60 * 1000,     // Keep in cache for 5 minutes
       refetchOnWindowFocus: false,
+      refetchOnMount: true,      // Refetch on mount if data is stale
       retry: 1,
     },
   },
 });
 ```
+
+**Important**: `refetchOnMount: true` ensures that after cache invalidation (via `invalidateQueries()`), the data will refetch when the component mounts. This is critical for liked status to stay in sync across page navigations.
 
 ### 2. Auth Provider
 
@@ -85,6 +88,38 @@ export const queryKeys = {
   },
 };
 ```
+
+### 4. Derived State with useMemo (Best Practice)
+
+**Pattern**: Use `useMemo` to derive posts with liked status instead of `useEffect`.
+
+```typescript
+// In HomeFeed.tsx and RankGrid.tsx
+const { data: likedMap } = useQuery({
+  queryKey: queryKeys.posts.liked(sessionId),
+  queryFn: async () => {
+    const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, options);
+    return new Map<string, boolean>(
+      postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
+    );
+  },
+});
+
+// Derive posts with liked status using useMemo (not useEffect!)
+const postsWithLikedStatus = useMemo(() => {
+  if (!likedMap || likedMap.size === 0) return posts;
+  return posts.map(post => ({
+    ...post,
+    isLiked: likedMap.get(String(post.id)) || false,
+  }));
+}, [posts, likedMap]);
+```
+
+**Why useMemo instead of useEffect?**
+- `useEffect` to sync TanStack Query data is an anti-pattern
+- `useMemo` computes derived values directly without intermediate state sync
+- The value is always in sync with its dependencies - no race conditions
+- Avoids the "double render" problem of `useEffect`
 
 ## Cache Behavior
 
@@ -169,6 +204,10 @@ If issues arise, revert to previous implementation by:
 | 2026-01-07 | TanStack Query + AuthProvider implemented | Complete |
 | 2026-01-07 | All components refactored (HomeFeed, RankGrid, ProfileClientPage) | Complete |
 | 2026-01-07 | Testing verified - caching working as expected | ✅ Verified |
+| 2026-01-08 | Fixed liked status not persisting across navigation | ✅ Fixed |
+| 2026-01-08 | Changed `refetchOnMount` to `true` in QueryProvider | ✅ Complete |
+| 2026-01-08 | Refactored to use `useMemo` for derived state (best practice) | ✅ Complete |
+| 2026-01-08 | Added profile cache invalidation when likes change | ✅ Complete |
 
 ## Files Created/Modified
 

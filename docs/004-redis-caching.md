@@ -46,9 +46,12 @@ User Request
 5. Store result in Redis with TTL and tags
 
 **Write Operation (Cache Invalidation):**
-1. Invalidate Redis tags (deletes all related keys)
-2. Invalidate Next.js Data Cache tags
+1. Invalidate Redis tags (deletes all related keys - posts AND profiles)
+2. Invalidate Next.js Data Cache tags (posts AND profiles)
 3. Purge Router Cache for affected paths
+4. Invalidate TanStack Query cache (client-side)
+
+**Important:** Profile pages cache posts with like counts, so profile cache must also be invalidated when likes change.
 
 ## File Structure
 
@@ -167,10 +170,15 @@ const posts = await getCachedHomePosts(0, 10);
 ```typescript
 import { revalidatePostsCache } from '@/app/actions/revalidate-posts';
 
-// After creating/updating/deleting a post
+// After creating/updating/deleting a post or liking/unliking
 await revalidatePostsCache();
-// Invalidates Redis tags + Next.js Data Cache + Router Cache
+// Invalidates:
+// - Redis tags (posts + profiles)
+// - Next.js Data Cache (posts + profiles)
+// - Router Cache for affected paths
 ```
+
+**Note:** Profile cache is also invalidated because profile pages cache posts with like counts. This ensures the profile wall shows correct like counts after likes change on Home or Rank pages.
 
 ### Direct Cache Operations
 

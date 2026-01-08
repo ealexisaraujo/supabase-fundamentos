@@ -132,19 +132,37 @@ The cached post data doesn't include `isLiked` status because:
 2. **Sessions are stored in localStorage**: Not available on the server
 3. **Cache would be wrong**: Caching `isLiked` would show one user's likes to everyone
 
-**Solution:** Fetch liked status on the client after receiving cached posts:
+**Solution:** Fetch liked status on the client using TanStack Query and derive state with `useMemo`:
 
 ```typescript
 // In HomeFeed.tsx (client component)
-useEffect(() => {
-  const initializeSession = async () => {
-    const sid = getSessionId();  // From localStorage
-    const postsWithLikeStatus = await getPostsWithLikeStatus(sid);
-    // Merge liked status into cached posts
-  };
-  initializeSession();
-}, [initialPosts]);
+
+// 1. Fetch liked status with TanStack Query caching
+const { data: likedMap } = useQuery({
+  queryKey: queryKeys.posts.liked(sessionId),
+  queryFn: async () => {
+    const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, options);
+    return new Map<string, boolean>(
+      postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
+    );
+  },
+  staleTime: 60 * 1000, // Cache for 60 seconds
+});
+
+// 2. Derive posts with liked status using useMemo (best practice)
+const postsWithLikedStatus = useMemo(() => {
+  if (!likedMap || likedMap.size === 0) return posts;
+  return posts.map(post => ({
+    ...post,
+    isLiked: likedMap.get(String(post.id)) || false,
+  }));
+}, [posts, likedMap]);
 ```
+
+**Why useMemo instead of useEffect?**
+- Using `useEffect` to sync TanStack Query data is an anti-pattern
+- `useMemo` computes derived values directly without intermediate state sync
+- The value is always in sync with its dependencies - no race conditions
 
 ### Why Keep Real-time Subscriptions?
 
@@ -177,15 +195,22 @@ When a user likes/unlikes a post, we invalidate the cache to ensure:
 
 1. **New visitors see fresh data**: The next page load after cache expiry will have correct counts
 2. **Rankings stay accurate**: Posts crossing the >5 likes threshold appear/disappear correctly
+3. **Profile pages show correct counts**: Profile walls cache posts with like counts
 
 ```typescript
 // In ratings.ts
 if (result.success) {
+  // Invalidate TanStack Query cache for fresh liked status
+  queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
+
+  // Invalidate server caches (Redis + unstable_cache + profiles)
   revalidatePostsCache().catch((err) => {
     console.error("[Ratings] Error revalidating cache:", err);
   });
 }
 ```
+
+**Important:** `revalidatePostsCache()` now invalidates both posts AND profiles caches, since profile pages cache posts with their like counts.
 
 **Why `.catch()`?** The revalidation is fire-and-forget. We don't want to block the like operation or fail if revalidation fails.
 

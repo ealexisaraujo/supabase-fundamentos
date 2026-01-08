@@ -115,11 +115,13 @@ Request → Redis (distributed) → unstable_cache (per-instance) → Supabase (
 | Layer | Data | Duration | Invalidation |
 |-------|------|----------|--------------|
 | Redis | Posts | 60s-5min | `invalidateCacheByTag()` |
-| Redis | Profiles | 3min | `invalidateCacheByTag()` |
+| Redis | Profiles | 3min | `invalidateCacheByTag()` (also on like/unlike) |
 | Server | Posts | 60s-5min | `revalidateTag()` |
-| Server | Profiles | 3min | `revalidateTag()` |
-| Client | Liked status | 60s stale | TanStack Query |
+| Server | Profiles | 3min | `revalidateTag()` (also on like/unlike) |
+| Client | Liked status | 60s stale | TanStack Query (`invalidateQueries()`) |
 | Client | Auth state | Event-driven | Supabase listener |
+
+**Note:** Profile cache is invalidated when likes change because profile pages cache posts with like counts.
 
 ### Providers Structure
 ```tsx
@@ -179,6 +181,7 @@ npx vitest run tests/comments.test.ts
 - Next.js `unstable_cache` for server-side data caching
 
 ## Recent Changes
+- 006-cache-sync-fix: Fixed liked status not persisting across page navigation. Changed `refetchOnMount: true` in QueryProvider to ensure stale data refetches on mount. Refactored HomeFeed and RankGrid to use `useMemo` for derived state (TanStack Query best practice). Added profile cache invalidation to `revalidatePostsCache()` since profile pages cache posts with like counts.
 - 005-authenticated-posts: Implemented authenticated post creation with user profile association. Posts are now linked to profiles via `profile_id` FK. Protected `/post` route requires auth. Profile wall displays user's posts. Home feed shows post authors with profile links. BottomNav is auth-aware. Added `PostForm.tsx`, `ProfileWall.tsx`. Updated PostCard to show author info from joined profile data.
 - 004-redis-caching: Implemented Upstash Redis caching layer as distributed cache. Added `utils/redis/` with client and cache utilities. Integrated Redis with cached-posts.ts and cached-profiles.ts. Updated cache invalidation in server actions. Graceful degradation when Redis not configured.
 - 003-client-caching: Implemented TanStack Query and AuthProvider for client-side caching. Reduced duplicate API calls during navigation. Added `app/providers/` with QueryProvider, AuthProvider. Refactored HomeFeed, RankGrid, ProfileClientPage to use `useQuery` and `useAuth` hooks.
