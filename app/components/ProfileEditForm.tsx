@@ -9,6 +9,10 @@ import { Button } from "./Button";
 import { shouldSkipImageOptimization } from "../utils/image";
 import { useUsernameValidation } from "../hooks/useUsernameValidation";
 import { normalizeUsername } from "../utils/username-validation";
+import {
+  revalidateProfileCache,
+  revalidateUsernameChange,
+} from "../actions/revalidate-profiles";
 
 interface Profile {
   id: string;
@@ -152,11 +156,24 @@ export default function ProfileEditForm({
         throw error;
       }
 
+      // Invalidate profile cache after successful update
+      const oldUsername = initialProfile?.username;
+      const newUsername = data.username;
+
+      if (oldUsername && oldUsername !== newUsername) {
+        // Username changed - invalidate both old and new username caches
+        await revalidateUsernameChange(oldUsername, newUsername);
+      } else {
+        // Same username - just invalidate the current profile cache
+        await revalidateProfileCache(newUsername);
+      }
+
       if (onSuccess && data) {
         onSuccess(data);
       } else {
-        router.push(`/profile/${data.username}`);
-        router.refresh();
+        // Use hard navigation to bypass Router Cache
+        // This ensures the profile page shows fresh data
+        window.location.href = `/profile/${data.username}`;
       }
     } catch (error) {
       setMessage({

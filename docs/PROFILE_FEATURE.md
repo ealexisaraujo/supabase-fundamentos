@@ -53,14 +53,16 @@ app/
 │   ├── create/
 │   │   └── page.tsx               → /profile/create (new profile form)
 │   └── [username]/
-│       ├── page.tsx               → /profile/:username (server component)
+│       ├── page.tsx               → /profile/:username (server component with caching)
 │       └── ProfileClientPage.tsx  → Client component for interactivity
 ├── actions/
-│   └── check-username.ts          → Server Action for username validation
+│   ├── check-username.ts          → Server Action for username validation
+│   └── revalidate-profiles.ts     → Server Action for profile cache invalidation
 ├── hooks/
 │   └── useUsernameValidation.ts   → Client hook for debounced validation
 └── utils/
-    └── username-validation.ts     → Username format rules and utilities
+    ├── username-validation.ts     → Username format rules and utilities
+    └── cached-profiles.ts         → Cached profile fetching utilities
 ```
 
 #### Route Explanations
@@ -246,6 +248,117 @@ await supabase.storage
   });
 ```
 
+### Caching Architecture
+
+The profile feature uses Next.js 16's `unstable_cache` API to reduce Supabase database hits while maintaining fresh data.
+
+#### Cache Configuration
+
+| Page | Cache Duration | Tags | Rationale |
+|------|----------------|------|-----------|
+| `/profile/[username]` | 180 seconds (3 min) | `profiles`, `profile-{username}` | Profiles change less frequently than posts |
+
+#### Hybrid Server + Client Component Pattern
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ User Request: /profile/alexis                               │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Server Component (page.tsx)                                 │
+│   └── getCachedProfile('alexis') ───► unstable_cache        │
+│           ├── Cache HIT → Return cached profile (instant!)  │
+│           └── Cache MISS → Fetch from Supabase → Cache      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Client Component (ProfileClientPage.tsx)                    │
+│   ├── Receives cached profile as props                      │
+│   ├── Checks isOwner (client-side auth)                     │
+│   ├── Handles edit mode toggle                              │
+│   └── Manages profile updates                               │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ (on profile update)
+┌─────────────────────────────────────────────────────────────┐
+│ Server Action (revalidateProfileCache)                      │
+│   ├── revalidateTag('profile-{username}') → Data Cache      │
+│   └── revalidatePath('/profile/{username}') → Router Cache  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Why `unstable_cache` for Profiles?
+
+1. **Works with Supabase client**: Unlike `fetch` caching, `unstable_cache` wraps any async function
+2. **Tag-based invalidation**: Supports targeted cache busting via `revalidateTag()`
+3. **Public read access**: Profiles have RLS public read, so no auth cookies needed in cached function
+
+#### Cache Limitations
+
+`unstable_cache` cannot use `cookies()` inside the cached function. Solution:
+
+```typescript
+// Use standalone Supabase client (no cookies) for cached functions
+function getSupabaseClient() {
+  return createClient(supabaseUrl, supabaseAnonKey)
+}
+```
+
+This works because profiles have public read access via RLS.
+
+#### What's Cached vs Client-Side
+
+| Data | Location | Reason |
+|------|----------|--------|
+| Profile data (username, bio, etc.) | Server Cache | Public data, same for all users |
+| `isOwner` status | Client-side | Requires auth session from cookies |
+| Edit mode state | Client-side | UI interaction state |
+
+#### Files
+
+| File | Purpose |
+|------|---------|
+| `app/utils/cached-profiles.ts` | `getCachedProfile()`, cache tags, standalone Supabase client |
+| `app/actions/revalidate-profiles.ts` | Server Actions for cache invalidation |
+
+#### Cache Invalidation
+
+```typescript
+// After profile update
+await revalidateProfileCache(username);
+
+// After username change
+await revalidateUsernameChange(oldUsername, newUsername);
+```
+
+#### Performance Impact
+
+```
+Before (No Cache):
+- Every profile visit = 1 Supabase query
+- 1000 visits/hour = 1000 queries/hour
+
+After (With Cache):
+- Cache HIT: 0 queries
+- Cache MISS: 1 query (cached for 180 seconds)
+- 1000 visits/hour with 180s cache ≈ 20 queries/hour (98% reduction!)
+```
+
+#### Navigation Flow
+
+```
+Home → Profile → Rank → Back to Home
+  ↓       ↓        ↓         ↓
+Cache   Cache    Cache     Cache
+ HIT     HIT      HIT       HIT
+(60s)  (180s)   (300s)     (60s)
+
+= Smooth, fast navigation with minimal DB hits
+```
+
 ## Username Validation System
 
 ### Architecture Overview
@@ -349,16 +462,21 @@ Check: Is user authenticated?
    Yes → Redirect to /profile/{username}
 ```
 
-### Profile View/Edit Flow
+### Profile View/Edit Flow (with Caching)
 
 ```
 /profile/{username}
         ↓
-Server Component fetches profile
+Server Component (page.tsx)
         ↓
-ProfileClientPage renders
+getCachedProfile(username)
         ↓
-Check: Is current user the owner?
+   ├── Cache HIT → Return cached data (< 1ms)
+   └── Cache MISS → Fetch from Supabase → Cache for 180s
+        ↓
+ProfileClientPage renders with cached profile
+        ↓
+Client-side: Check isOwner (auth from cookies)
         ↓
    Yes → Show "Editar Perfil" button + avatar hover
    No → View-only mode
@@ -371,7 +489,11 @@ User updates fields → Real-time validation
         ↓
 Supabase upsert → Success
         ↓
-Return to view mode with updated data
+Cache invalidation:
+   ├── revalidateTag('profile-{username}')
+   └── revalidatePath('/profile/{username}')
+        ↓
+Hard navigation → Fresh profile data displayed
 ```
 
 ### Username Validation Flow
@@ -470,6 +592,29 @@ Implemented a production-grade validation system:
 
 This balances UX (fast feedback) with security (rate limiting, timing attack prevention).
 
+### 10. Server-Side Caching with `unstable_cache`
+
+Implemented caching for profile pages using the same pattern as home/rank pages:
+
+- **Cache duration**: 180 seconds (profiles change less frequently than posts)
+- **Standalone Supabase client**: Avoids `cookies()` limitation in `unstable_cache`
+- **Tag-based invalidation**: `profile-{username}` for targeted cache busting
+- **Hard navigation after updates**: Bypasses Router Cache for reliable fresh data
+
+This reduces database load by ~98% while maintaining data freshness through proper invalidation.
+
+### 11. Consistent Navigation Experience
+
+All three main pages (Home, Profile, Rank) now use the same caching pattern:
+
+| Page | Cache Duration | Pattern |
+|------|----------------|---------|
+| Home | 60 seconds | Server Component + `unstable_cache` |
+| Profile | 180 seconds | Server Component + `unstable_cache` |
+| Rank | 300 seconds | Server Component + `unstable_cache` |
+
+This ensures smooth navigation between pages without unnecessary database hits.
+
 ## Security Considerations
 
 ### 1. Row Level Security (RLS)
@@ -541,20 +686,41 @@ supabase migration up
 
 ### Manual Testing Checklist
 
+**Authentication & Navigation:**
 - [ ] Navigate to `/profile` when logged out → redirects to login
 - [ ] Navigate to `/profile` when logged in without profile → redirects to create
+
+**Profile Creation:**
 - [ ] Create profile with all fields → success
 - [ ] Create profile with duplicate username → generic error message
 - [ ] Create profile with reserved username (admin, null) → error message
+
+**Profile View:**
 - [ ] View own profile → shows Edit button and avatar hover
 - [ ] View other user's profile → no Edit button, no hover
 - [ ] Hover over avatar (owner) → shows "Editar foto" overlay
 - [ ] Click avatar (owner) → opens edit mode
+
+**Profile Edit:**
 - [ ] Edit profile → changes persist
 - [ ] Upload avatar → preview shows, saves correctly
 - [ ] Change username → real-time validation feedback
 - [ ] Try existing username → "No disponible" error
 - [ ] Try invalid format (too short, special chars) → format error
+
+**Caching Behavior:**
+- [ ] First visit to profile → server log shows "Fetching profile for username"
+- [ ] Refresh within 3 minutes → no new Supabase fetch (cache hit)
+- [ ] Wait 3+ minutes and refresh → new fetch in server logs (cache expired)
+- [ ] Edit profile → updated data shows immediately after save
+- [ ] Change username → both old and new URLs show correct data
+- [ ] Navigate Home → Profile → Rank → Home → all pages load fast (cache hits)
+- [ ] Check server logs → minimal Supabase queries during navigation
+
+**Cache Invalidation:**
+- [ ] After profile update → cache is invalidated, fresh data on next visit
+- [ ] After username change → old username cache invalidated
+- [ ] After avatar upload → new avatar URL visible immediately
 
 ## Future Enhancements
 
