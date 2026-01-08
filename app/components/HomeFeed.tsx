@@ -45,6 +45,8 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  // Track if auth state is being loaded - prevents Login button flash
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   // Track if we're still initializing (fetching liked status)
   // This helps show skeletons during brief loading periods or on errors
   const [isInitializing, setIsInitializing] = useState(true);
@@ -192,6 +194,7 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
       // Check for user session
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
+      setIsAuthLoading(false);
     };
 
     initializeSession();
@@ -260,7 +263,16 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
           <div className="flex items-center gap-3 shrink-0">
             <ThemeToggle />
 
-            {user ? (
+            {isAuthLoading ? (
+              // Loading skeleton while checking auth - prevents Login button flash
+              <div className="flex items-center gap-3 animate-pulse">
+                <div className="hidden sm:flex flex-col items-end gap-1">
+                  <div className="h-3 w-16 bg-foreground/10 rounded" />
+                  <div className="h-2 w-24 bg-foreground/10 rounded" />
+                </div>
+                <div className="h-8 w-16 bg-foreground/10 rounded-full" />
+              </div>
+            ) : user ? (
               <div className="flex items-center gap-3">
                 <div className="hidden sm:flex flex-col items-end">
                   <span className="text-xs font-medium text-foreground">{user.email?.split('@')[0]}</span>
