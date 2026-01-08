@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/utils/client";
 import { BackIcon } from "@/app/components/icons";
+import { Button } from "@/app/components/Button";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -18,7 +19,7 @@ export default function RegisterPage() {
     setMessage(null);
 
     if (password !== confirmPassword) {
-      setMessage({ type: "error", text: "Las contraseñas no coinciden" });
+      setMessage({ type: "error", text: "Las contrasenas no coinciden" });
       setIsLoading(false);
       return;
     }
@@ -31,9 +32,9 @@ export default function RegisterPage() {
 
       if (error) throw error;
 
-      setMessage({ 
-        type: "success", 
-        text: "¡Registro exitoso! Revisa tu correo para confirmar tu cuenta." 
+      setMessage({
+        type: "success",
+        text: "Registro exitoso! Revisa tu correo para confirmar tu cuenta."
       });
       setEmail("");
       setPassword("");
@@ -51,14 +52,16 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 relative">
       {/* Back Button */}
-      <Link 
-        href="/"
-        className="absolute top-6 left-6 flex items-center gap-2 px-6 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-[#a3e635] to-[#bef264] text-black shadow-md hover:shadow-lg hover:brightness-105 transition-all transform hover:-translate-y-0.5"
-        aria-label="Volver al inicio"
-      >
-        <BackIcon className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
-        <span className="text-sm font-medium">Volver</span>
-      </Link>
+      <div className="absolute top-6 left-6">
+        <Button
+          variant="accent"
+          size="sm"
+          href="/"
+          leftIcon={<BackIcon className="w-4 h-4" />}
+        >
+          Volver
+        </Button>
+      </div>
 
       <div className="w-full max-w-sm relative">
         {/* Logo */}
@@ -75,7 +78,7 @@ export default function RegisterPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Correo electrónico"
+            placeholder="Correo electronico"
             required
             className="w-full px-4 py-3 rounded-xl bg-card-bg border border-border text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
@@ -84,7 +87,7 @@ export default function RegisterPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Contraseña"
+            placeholder="Contrasena"
             required
             minLength={6}
             className="w-full px-4 py-3 rounded-xl bg-card-bg border border-border text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -94,7 +97,7 @@ export default function RegisterPage() {
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Confirmar contraseña"
+            placeholder="Confirmar contrasena"
             required
             minLength={6}
             className="w-full px-4 py-3 rounded-xl bg-card-bg border border-border text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -113,20 +116,22 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            size="lg"
+            fullWidth
             disabled={isLoading}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? "Registrando..." : "Registrarse"}
-          </button>
+          </Button>
         </form>
 
         {/* Link a login */}
         <p className="text-center text-foreground/60 mt-6">
-          ¿Ya tienes cuenta?{" "}
+          Ya tienes cuenta?{" "}
           <Link href="/auth/login" className="text-primary hover:underline">
-            Inicia sesión
+            Inicia sesion
           </Link>
         </p>
       </div>

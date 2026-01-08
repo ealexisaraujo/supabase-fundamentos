@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { HomeIcon, PlusIcon, RankIcon } from "./icons";
+import { HomeIcon, PlusIcon, RankIcon, UserIcon } from "./icons";
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -26,13 +26,6 @@ export default function BottomNav() {
         </Link>
 
         <Link
-          href="/post"
-          className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-r from-primary to-accent text-white shadow-lg hover:scale-105 transition-transform"
-        >
-          <PlusIcon />
-        </Link>
-
-        <Link
           href="/rank"
           className={`flex flex-col items-center gap-1 px-4 py-2 transition-colors ${
             pathname === "/rank" ? "text-primary" : "text-foreground/60 hover:text-foreground"
@@ -40,6 +33,23 @@ export default function BottomNav() {
         >
           <RankIcon filled={pathname === "/rank"} />
           <span className="text-xs font-medium">Rank</span>
+        </Link>
+
+        <Link
+          href="/post"
+          className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-r from-primary to-accent text-white shadow-lg hover:scale-105 transition-transform"
+        >
+          <PlusIcon />
+        </Link>
+
+        <Link
+          href="/profile"
+          className={`flex flex-col items-center gap-1 px-4 py-2 transition-colors ${
+            pathname?.startsWith("/profile") ? "text-primary" : "text-foreground/60 hover:text-foreground"
+          }`}
+        >
+          <UserIcon filled={pathname?.startsWith("/profile")} />
+          <span className="text-xs font-medium">Profile</span>
         </Link>
       </div>
     </nav>
