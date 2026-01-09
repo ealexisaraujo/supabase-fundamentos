@@ -51,6 +51,9 @@ export interface CountsAndLikedResult {
  * Uses a server action to support local Redis TCP connections
  * (which only work on the server side).
  *
+ * IMPORTANT: Server actions don't serialize Maps properly (they become empty objects).
+ * The server action returns arrays which we convert back to Maps here.
+ *
  * @param postIds - Array of post IDs
  * @param sessionId - Session ID to check liked status
  * @returns Object with countsMap and likedMap
@@ -67,7 +70,14 @@ export async function fetchCountsFromRedis(
   }
 
   // Use server action to fetch from Redis (supports local Redis TCP)
-  return fetchCountsFromRedisAction(postIds, sessionId);
+  // Server action returns arrays because Maps don't serialize properly
+  const { countsArray, likedArray } = await fetchCountsFromRedisAction(postIds, sessionId);
+
+  // Reconstruct Maps from arrays
+  return {
+    countsMap: new Map(countsArray),
+    likedMap: new Map(likedArray),
+  };
 }
 
 /**

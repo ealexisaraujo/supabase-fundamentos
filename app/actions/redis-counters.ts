@@ -8,6 +8,9 @@
  *
  * With Upstash (HTTP), counter operations could run directly in the browser.
  * With local Redis (TCP), they must run on the server.
+ *
+ * IMPORTANT: Maps don't serialize properly in server actions (become empty objects).
+ * We serialize as arrays and reconstruct on the client side.
  */
 
 import {
@@ -17,6 +20,15 @@ import {
   type LikeResult,
 } from "../utils/redis/counters";
 
+/**
+ * Serialized result format that survives JSON serialization
+ * Maps are converted to arrays: [key, value][]
+ */
+export interface CountsAndLikedResultSerialized {
+  countsArray: [string, number][];
+  likedArray: [string, boolean][];
+}
+
 export interface CountsAndLikedResult {
   countsMap: Map<string, number>;
   likedMap: Map<string, boolean>;
@@ -25,15 +37,18 @@ export interface CountsAndLikedResult {
 /**
  * Fetch counts and liked status for multiple posts
  * Called from client components via server action
+ *
+ * Returns arrays instead of Maps because Maps don't serialize properly
+ * in server action responses (they become empty objects {}).
  */
 export async function fetchCountsFromRedisAction(
   postIds: string[],
   sessionId: string
-): Promise<CountsAndLikedResult> {
+): Promise<CountsAndLikedResultSerialized> {
   if (!sessionId || postIds.length === 0) {
     return {
-      countsMap: new Map<string, number>(),
-      likedMap: new Map<string, boolean>(),
+      countsArray: [],
+      likedArray: [],
     };
   }
 
@@ -43,7 +58,11 @@ export async function fetchCountsFromRedisAction(
     getLikedStatuses(postIds, sessionId),
   ]);
 
-  return { countsMap, likedMap };
+  // Convert Maps to arrays for proper JSON serialization
+  return {
+    countsArray: Array.from(countsMap.entries()),
+    likedArray: Array.from(likedMap.entries()),
+  };
 }
 
 /**
