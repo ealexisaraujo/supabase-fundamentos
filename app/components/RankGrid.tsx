@@ -20,6 +20,7 @@ import Image from "next/image";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getPostsWithLikeStatus } from "../utils/posts";
+import { RANK_MIN_LIKES, RANK_PAGE_LIMIT } from "../utils/cached-posts";
 import { subscribeToPostLikes, togglePostLike } from "../utils/ratings";
 import { getSessionId } from "../utils/session";
 import type { Post } from "../mocks/posts";
@@ -59,10 +60,10 @@ export function RankGrid({ initialPosts }: RankGridProps) {
 
       console.log("[RankGrid] Fetching liked status (cached query)");
       const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, {
-        minLikes: 5,
+        minLikes: RANK_MIN_LIKES,
         orderBy: "likes",
         ascending: false,
-        limit: 100, // Fetch liked status for all ranked posts, not just first 10
+        limit: RANK_PAGE_LIMIT, // Use same limit as server-side fetch
       });
 
       // Create a map of post ID to liked status

@@ -40,6 +40,10 @@ const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
 const HOME_CACHE_REVALIDATE = 60 // 60 seconds for home page
 const RANK_CACHE_REVALIDATE = 300 // 5 minutes for ranking page
 
+// Ranking page configuration
+export const RANK_MIN_LIKES = 5 // Minimum likes to appear in ranking
+export const RANK_PAGE_LIMIT = 50 // Max posts to show in ranking (prevents fetching 10k posts)
+
 // Create a standalone Supabase client for cached functions
 // This avoids using cookies() which is not allowed inside unstable_cache
 // Since we're only reading public posts data, we don't need auth cookies
@@ -130,13 +134,15 @@ async function fetchRankedPosts(): Promise<Post[]> {
   if (USE_MOCKS) {
     console.log('[CachedPosts] Using mock data for ranked posts')
     return [...mockPosts]
-      .filter(post => post.likes > 5)
+      .filter(post => post.likes > RANK_MIN_LIKES)
       .sort((a, b) => b.likes - a.likes)
+      .slice(0, RANK_PAGE_LIMIT)
   }
 
   const supabase = getSupabaseClient()
 
   // Fetch ranked posts with joined profile data and comment count
+  // Limited to RANK_PAGE_LIMIT to prevent fetching thousands of posts
   const { data, error } = await supabase
     .from('posts_new')
     .select(`
@@ -148,8 +154,9 @@ async function fetchRankedPosts(): Promise<Post[]> {
       ),
       comments(count)
     `)
-    .gt('likes', 5)
+    .gt('likes', RANK_MIN_LIKES)
     .order('likes', { ascending: false })
+    .limit(RANK_PAGE_LIMIT)
 
   if (error) {
     console.error('[CachedPosts] Error fetching ranked posts:', error)
