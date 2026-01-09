@@ -399,13 +399,22 @@ This is overkill for current traffic but useful for:
 
 ## Testing Checklist
 
-- [ ] Like counter increments correctly (no flash)
-- [ ] Unlike counter decrements correctly (no flash)
-- [ ] Multi-tab sync works via Realtime
-- [ ] 406 error no longer appears
-- [ ] Optimistic update shows immediate feedback
-- [ ] Server state matches final UI state
-- [ ] Rapid clicking doesn't cause issues
+- [x] Like counter increments correctly (no flash)
+- [x] Unlike counter decrements correctly (no flash)
+- [x] Multi-tab sync works via Realtime
+- [x] 406 error no longer appears (RPC function handles this internally)
+- [x] Optimistic update shows immediate feedback
+- [x] Server state matches final UI state
+- [ ] Rapid clicking doesn't cause issues (to verify)
+
+### Test Results (2026-01-08)
+
+| Test | Before Fix | After Fix |
+|------|------------|-----------|
+| Unlike (2→1) | 2→3→1 (wrong direction flash) | 2→1 (correct) |
+| Like (1→2) | 1→0→2 (wrong direction flash) | 1→2 (correct) |
+| RPC Response | N/A (4 separate calls) | `{"success":true,"isLiked":true,"newLikeCount":2}` |
+| Network Calls | 4 per like/unlike | 1 per like/unlike |
 
 ---
 
