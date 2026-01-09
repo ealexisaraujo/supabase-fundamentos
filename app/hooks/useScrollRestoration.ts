@@ -55,18 +55,29 @@ export function useScrollRestoration(options: UseScrollRestorationOptions = {}) 
   // Restore scroll position
   const restoreScrollPosition = useCallback(() => {
     if (hasRestoredRef.current) return;
+    hasRestoredRef.current = true; // Mark as attempted early to prevent multiple calls
 
     const saved = sessionStorage.getItem(storageKey);
     if (saved) {
       const scrollY = parseInt(saved, 10);
       if (!isNaN(scrollY) && scrollY > 0) {
         log("Restoring scroll position:", scrollY);
-        // Use setTimeout to wait for content to render
-        setTimeout(() => {
-          window.scrollTo({ top: scrollY, behavior: "instant" });
-          hasRestoredRef.current = true;
-          log("Scroll restored to:", scrollY);
-        }, restoreDelay);
+
+        // Use requestAnimationFrame + setTimeout for reliable restoration
+        // This ensures the DOM has been painted before scrolling
+        const restore = () => {
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: scrollY, behavior: "instant" });
+            log("Scroll restored to:", scrollY);
+          });
+        };
+
+        // Restore after initial render
+        setTimeout(restore, restoreDelay);
+        // Restore again after content might have loaded
+        setTimeout(restore, 300);
+        // Final attempt for slow content
+        setTimeout(restore, 600);
       }
     }
   }, [storageKey, restoreDelay, log]);
