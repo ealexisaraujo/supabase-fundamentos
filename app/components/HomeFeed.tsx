@@ -100,6 +100,13 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   /**
    * Handles like/unlike toggle for a post
    * Uses optimistic updates for immediate UI feedback
+   *
+   * IMPORTANT: We must read the current liked status from likedMap (TanStack Query cache),
+   * NOT from the posts state. The posts state may have stale isLiked values from the server,
+   * while likedMap always has the accurate client-side liked status.
+   *
+   * This was the root cause of the "flash bug" where the counter would briefly show
+   * the wrong value (going in the opposite direction).
    */
   const handleLike = async (postId: number | string) => {
     const postIdStr = String(postId);
@@ -110,17 +117,35 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
       return;
     }
 
+    // Get current liked status from likedMap (source of truth), NOT from posts state
+    // This is critical to prevent the flash bug where optimistic update goes wrong direction
+    const currentlyLiked = likedMap?.get(postIdStr) ?? false;
+
+    console.log(`[HomeFeed] Optimistic update: post ${postIdStr}, currentlyLiked=${currentlyLiked}, will become ${!currentlyLiked}`);
+
     // Optimistic update for immediate UI feedback
+    // Use currentlyLiked from likedMap, NOT post.isLiked from state
     setPosts((prevPosts) =>
       prevPosts.map((post) =>
         post.id === postId
           ? {
               ...post,
-              isLiked: !post.isLiked,
-              likes: post.isLiked ? post.likes - 1 : post.likes + 1,
+              isLiked: !currentlyLiked,
+              likes: currentlyLiked ? post.likes - 1 : post.likes + 1,
             }
           : post
       )
+    );
+
+    // Also update likedMap in TanStack Query cache for consistency
+    queryClient.setQueryData(
+      queryKeys.posts.liked(sessionId),
+      (old: Map<string, boolean> | undefined) => {
+        if (!old) return new Map([[postIdStr, !currentlyLiked]]);
+        const newMap = new Map(old);
+        newMap.set(postIdStr, !currentlyLiked);
+        return newMap;
+      }
     );
 
     // Mark as processing
@@ -139,16 +164,29 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
     // If failed, revert the optimistic update
     if (!result.success) {
       console.error("[HomeFeed] Failed to toggle like:", result.error);
+
+      // Revert posts state
       setPosts((prevPosts) =>
         prevPosts.map((post) =>
           post.id === postId
             ? {
                 ...post,
-                isLiked: !post.isLiked,
-                likes: post.isLiked ? post.likes - 1 : post.likes + 1,
+                isLiked: currentlyLiked, // Revert to original value
+                likes: currentlyLiked ? post.likes + 1 : post.likes - 1, // Undo the change
               }
             : post
         )
+      );
+
+      // Revert likedMap cache
+      queryClient.setQueryData(
+        queryKeys.posts.liked(sessionId),
+        (old: Map<string, boolean> | undefined) => {
+          if (!old) return new Map([[postIdStr, currentlyLiked]]);
+          const newMap = new Map(old);
+          newMap.set(postIdStr, currentlyLiked);
+          return newMap;
+        }
       );
     } else {
       // Invalidate TanStack Query cache to ensure fresh data on navigation
