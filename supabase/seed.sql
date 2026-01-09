@@ -152,7 +152,12 @@ INSERT INTO public.profiles (id, username, full_name, avatar_url, bio, website) 
     ('c3333333-3333-3333-3333-333333333333', 'ana_foodie', 'Ana Martinez', 'https://i.pravatar.cc/150?u=ana_foodie', 'Food photographer | Restaurant reviewer | Coffee addict', NULL),
     ('d4444444-4444-4444-4444-444444444444', 'pedro_urban', 'Pedro Sanchez', 'https://i.pravatar.cc/150?u=pedro_urban', 'Urban explorer capturing city life', 'https://pedrourban.photo'),
     ('e5555555-5555-5555-5555-555555555555', 'lucia_nature', 'Lucia Fernandez', 'https://i.pravatar.cc/150?u=lucia_nature', 'Nature lover | Wildlife photographer', NULL)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    username = EXCLUDED.username,
+    full_name = EXCLUDED.full_name,
+    avatar_url = EXCLUDED.avatar_url,
+    bio = EXCLUDED.bio,
+    website = EXCLUDED.website;
 
 -- =============================================================================
 -- 3. POSTS - AUTHENTICATED (with profile_id)

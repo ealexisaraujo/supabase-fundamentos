@@ -41,7 +41,8 @@ export default function BottomNav() {
   }
 
   // Determine profile link destination
-  const profileHref = profile ? `/profile/${profile.username}` : "/profile";
+  // If user has no username yet, redirect to /profile (which goes to /profile/create)
+  const profileHref = profile?.username ? `/profile/${profile.username}` : "/profile";
   const isProfileActive = pathname?.startsWith("/profile");
 
   return (

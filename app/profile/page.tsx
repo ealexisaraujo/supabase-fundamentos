@@ -16,7 +16,9 @@ export default async function ProfilePage() {
     .eq("id", user.id)
     .single();
 
-  if (profile) {
+  // Only redirect to profile page if user has set a username
+  // Otherwise, redirect to create page to set username
+  if (profile?.username) {
     redirect(`/profile/${profile.username}`);
   } else {
     redirect("/profile/create");

@@ -21,7 +21,8 @@ interface PostCardProps {
  */
 function getAuthorInfo(post: Post) {
   // New authenticated posts have profile data from join
-  if (post.profile) {
+  // Only consider authenticated if profile exists AND has a username
+  if (post.profile?.username) {
     return {
       username: post.profile.username,
       avatar: post.profile.avatar_url || "https://i.pravatar.cc/40?u=anonymous",
@@ -29,14 +30,14 @@ function getAuthorInfo(post: Post) {
     };
   }
   // Legacy posts or mock data have user field
-  if (post.user) {
+  if (post.user?.username) {
     return {
       username: post.user.username,
-      avatar: post.user.avatar,
+      avatar: post.user.avatar || "https://i.pravatar.cc/40?u=anonymous",
       isAuthenticated: false,
     };
   }
-  // Fallback for truly anonymous posts
+  // Fallback for truly anonymous posts or users without username set
   return {
     username: "Anonymous",
     avatar: "https://i.pravatar.cc/40?u=anonymous",

@@ -25,7 +25,8 @@ export default function CreateProfilePage() {
         .eq("id", user.id)
         .single();
 
-      if (profile) {
+      // Only redirect if user has already set a username
+      if (profile?.username) {
         router.replace(`/profile/${profile.username}`);
       }
       setChecking(false);
