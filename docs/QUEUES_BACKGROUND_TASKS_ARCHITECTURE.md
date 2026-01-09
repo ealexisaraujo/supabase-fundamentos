@@ -15,8 +15,8 @@ This document outlines the next-level architecture for implementing queues and b
 |-------|--------|-------|
 | Phase 1: Enable pgmq | ✅ Complete | Extension enabled, queues created |
 | Phase 2: Enqueue Events | ✅ Complete | `toggle_post_like` enqueues rich metadata |
-| Phase 3: Edge Functions | ⏳ Pending | Next step |
-| Phase 4: pg_cron | ⏳ Pending | Requires Edge Functions first |
+| Phase 3: Edge Functions | ✅ Complete | `process-like-events` deployed |
+| Phase 4: pg_cron | ✅ Complete | Runs every minute |
 
 ---
 
@@ -541,9 +541,10 @@ PERFORM pgmq.delete('notifications', msg.msg_id);
   - `post_id`, `post_owner_id`, `post_caption`
   - `liker_session_id`, `liker_profile_id`
   - `new_like_count`, `timestamp`, `metadata`
+- [x] Create process-like-events Edge Function (deployed via Supabase MCP)
 - [ ] Create process-notifications Edge Function
 - [ ] Create process-analytics Edge Function
-- [ ] Set up pg_cron schedules
+- [x] Set up pg_cron schedule (every minute)
 
 ### Phase 3: Enhanced Features
 - [ ] Add analytics_events table
