@@ -17,10 +17,9 @@
  */
 
 import Image from "next/image";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getPostsWithLikeStatus } from "../utils/posts";
-import { RANK_MIN_LIKES, RANK_PAGE_LIMIT } from "../utils/cached-posts";
+import { fetchCountsFromRedis } from "../utils/posts-with-counts";
 import type { Post } from "../mocks/posts";
 import { PostModal } from "./PostModal";
 import { RankItemSkeleton } from "./Skeletons";
@@ -43,41 +42,60 @@ export function RankGrid({ initialPosts }: RankGridProps) {
   // Initialize posts with server-provided data
   const [posts, setPosts] = useState<Post[]>(initialPosts);
 
-  // Fetch liked status with TanStack Query caching
-  // Returns a Map of postId -> isLiked for efficient lookups
-  const { data: likedMap, isLoading: isLikedStatusLoading } = useQuery({
+  // Fetch counts and liked status from Redis with TanStack Query caching
+  // Redis is the source of truth for counters, ensuring consistency across views
+  const { data: redisData, isLoading: isLikedStatusLoading } = useQuery({
     queryKey: queryKeys.posts.ranked(sessionId),
     queryFn: async () => {
-      if (!sessionId || initialPosts.length === 0) return new Map<string, boolean>();
+      if (!sessionId || posts.length === 0) {
+        return { countsMap: new Map<string, number>(), likedMap: new Map<string, boolean>() };
+      }
 
-      const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, {
-        minLikes: RANK_MIN_LIKES,
-        orderBy: "likes",
-        ascending: false,
-        limit: RANK_PAGE_LIMIT,
-      });
-
-      // Create a map of post ID to liked status
-      return new Map<string, boolean>(
-        postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
-      );
+      const postIds = posts.map(p => String(p.id));
+      return fetchCountsFromRedis(postIds, sessionId);
     },
-    enabled: !!sessionId && initialPosts.length > 0,
-    staleTime: 60 * 1000, // Consider fresh for 60 seconds
+    enabled: !!sessionId && posts.length > 0,
+    staleTime: 30 * 1000, // Consider fresh for 30 seconds
+    refetchOnMount: true, // Always refetch on mount to get fresh counts
   });
 
-  // Derive posts with liked status using useMemo (TanStack Query best practice)
-  // This is a computed value that combines base posts with the cached likedMap
-  // No useEffect needed - the value is always in sync with its dependencies
+  // Also read from global counts cache (updated by other views when liking)
+  const { data: globalCountsData } = useQuery({
+    queryKey: queryKeys.posts.counts(sessionId),
+    queryFn: () => ({ countsMap: new Map<string, number>(), likedMap: new Map<string, boolean>() }),
+    enabled: !!sessionId,
+    staleTime: Infinity, // Never refetch - only updated by setQueryData
+  });
+
+  // Merge counts: prefer global cache (updated by likes in other views)
+  const countsMap = useMemo(() => {
+    const merged = new Map<string, number>(redisData?.countsMap);
+    globalCountsData?.countsMap?.forEach((count, id) => merged.set(id, count));
+    return merged;
+  }, [redisData?.countsMap, globalCountsData?.countsMap]);
+
+  // Merge liked status: prefer global cache (updated by likes in other views)
+  const likedMap = useMemo(() => {
+    const merged = new Map<string, boolean>(redisData?.likedMap);
+    globalCountsData?.likedMap?.forEach((liked, id) => merged.set(id, liked));
+    return merged;
+  }, [redisData?.likedMap, globalCountsData?.likedMap]);
+
+  // Derive posts with counts and liked status from Redis
+  // This ensures all views show consistent counts from Redis
   const postsWithLikedStatus = useMemo(() => {
-    if (!likedMap || likedMap.size === 0) {
+    if (!countsMap && !likedMap) {
       return posts;
     }
-    return posts.map(post => ({
-      ...post,
-      isLiked: likedMap.get(String(post.id)) || false,
-    }));
-  }, [posts, likedMap]);
+    return posts.map(post => {
+      const id = String(post.id);
+      return {
+        ...post,
+        likes: countsMap?.get(id) ?? post.likes,
+        isLiked: likedMap?.get(id) ?? false,
+      };
+    });
+  }, [posts, countsMap, likedMap]);
 
   // Track initialization state
   const isInitializing = isLikedStatusLoading && posts.length === 0;

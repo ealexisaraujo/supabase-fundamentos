@@ -121,6 +121,12 @@ export const queryKeys = {
     ranked: (sessionId: string) => ["posts", "ranked", sessionId] as const,
     profileLiked: (username: string, sessionId: string) =>
       ["posts", "profile", username, "liked", sessionId] as const,
+    /**
+     * Global counts cache - SHARED across all views
+     * This is the single source of truth for countsMap and likedMap
+     * All views should read from this cache to ensure consistency
+     */
+    counts: (sessionId: string) => ["posts", "counts", sessionId] as const,
   },
   comments: {
     all: ["comments"] as const,

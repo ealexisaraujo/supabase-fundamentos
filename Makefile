@@ -7,9 +7,10 @@
 #   make down      - Stop all services
 #   make status    - Check status of all services
 
-.PHONY: help up down status logs clean \
+.PHONY: help up down status logs clean setup \
         supabase-up supabase-down supabase-status supabase-reset \
-        redis-up redis-down redis-status redis-logs redis-cli redis-flush \
+        redis-up redis-down redis-status redis-logs redis-cli redis-flush redis-migrate redis-verify \
+        prod-verify prod-migrate \
         dev build test
 
 # Default target
@@ -31,13 +32,25 @@ help: ## Show this help message
 	@echo "$(CYAN)Suplatzigram Local Development$(RESET)"
 	@echo "================================"
 	@echo ""
-	@echo "$(GREEN)Quick Start:$(RESET)"
+	@echo "$(GREEN)Quick Start (New Developer):$(RESET)"
+	@echo "  make setup   - Full setup (services + Redis migration)"
+	@echo ""
+	@echo "$(GREEN)Daily Commands:$(RESET)"
 	@echo "  make up      - Start all services (Supabase + Redis)"
 	@echo "  make status  - Check status of all services"
 	@echo "  make dev     - Start Next.js dev server"
 	@echo "  make down    - Stop all services"
 	@echo ""
-	@echo "$(GREEN)Available Commands:$(RESET)"
+	@echo "$(GREEN)Redis Commands:$(RESET)"
+	@echo "  make redis-migrate - Sync counters from Supabase to Redis"
+	@echo "  make redis-cli     - Open Redis CLI"
+	@echo "  make redis-flush   - Clear all Redis data"
+	@echo ""
+	@echo "$(GREEN)Production Commands:$(RESET)"
+	@echo "  make prod-verify   - Verify Upstash vs Supabase cloud sync"
+	@echo "  make prod-migrate  - Migrate counters to Upstash Redis"
+	@echo ""
+	@echo "$(GREEN)All Commands:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-18s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 
@@ -54,6 +67,21 @@ down: redis-down supabase-down ## Stop all services
 	@echo ""
 	@echo "$(GREEN)All services stopped.$(RESET)"
 
+setup: up redis-migrate ## Full setup for new developers (start services + migrate Redis)
+	@echo ""
+	@echo "$(GREEN)========================================$(RESET)"
+	@echo "$(GREEN)Setup complete!$(RESET)"
+	@echo "$(GREEN)========================================$(RESET)"
+	@echo ""
+	@echo "Your local environment is ready:"
+	@echo "  - Supabase: http://localhost:54323 (Studio)"
+	@echo "  - Redis: localhost:6379 (TCP)"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Run 'make dev' to start the Next.js server"
+	@echo "  2. Open http://localhost:3000"
+	@echo ""
+
 status: ## Check status of all services
 	@echo ""
 	@echo "$(CYAN)=== Supabase Status ===$(RESET)"
@@ -63,12 +91,12 @@ status: ## Check status of all services
 	@docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "$(RED)Redis containers not found$(RESET)"
 	@echo ""
 	@echo "$(CYAN)=== Redis Connection Test ===$(RESET)"
-	@curl -s -X POST http://localhost:8079 \
-		-H "Authorization: Bearer local_development_token" \
-		-H "Content-Type: application/json" \
-		-d '["PING"]' 2>/dev/null | grep -q "PONG" \
-		&& echo "$(GREEN)Redis HTTP API: OK$(RESET)" \
-		|| echo "$(RED)Redis HTTP API: Not responding$(RESET)"
+	@redis-cli PING 2>/dev/null | grep -q "PONG" \
+		&& echo "$(GREEN)Redis TCP (port 6379): OK$(RESET)" \
+		|| echo "$(RED)Redis TCP (port 6379): Not responding$(RESET)"
+	@echo ""
+	@echo "$(CYAN)=== Redis Counter Keys ===$(RESET)"
+	@redis-cli KEYS 'post:likes:*' 2>/dev/null | wc -l | xargs -I {} echo "Post counters: {} keys"
 	@echo ""
 
 logs: ## Show logs from all services (Ctrl+C to exit)
@@ -135,11 +163,44 @@ redis-cli: ## Open Redis CLI
 
 redis-flush: ## Flush all Redis data (clear cache)
 	@echo "$(YELLOW)Flushing Redis cache...$(RESET)"
-	@docker exec suplatzigram-redis redis-cli FLUSHDB
+	@redis-cli FLUSHDB
 	@echo "$(GREEN)Redis cache cleared.$(RESET)"
 
 redis-keys: ## List all Redis keys
-	@docker exec suplatzigram-redis redis-cli KEYS '*'
+	@redis-cli KEYS '*'
+
+redis-migrate: ## Sync like counters from Supabase to local Redis
+	@echo "$(CYAN)Migrating counters from Supabase to Redis...$(RESET)"
+	@npx tsx scripts/migrate-counters-to-redis-local.ts
+	@echo ""
+
+redis-verify: ## Verify Redis data matches Supabase
+	@echo "$(CYAN)=== Redis vs Supabase Verification ===$(RESET)"
+	@echo ""
+	@echo "Redis post counters:"
+	@redis-cli KEYS 'post:likes:*' | wc -l | xargs -I {} echo "  {} posts in Redis"
+	@echo ""
+	@echo "Supabase posts:"
+	@psql postgresql://postgres:postgres@localhost:54322/postgres -t -c "SELECT COUNT(*) FROM posts_new;" 2>/dev/null | xargs -I {} echo "  {} posts in Supabase"
+	@echo ""
+	@echo "Redis liked sets:"
+	@redis-cli KEYS 'post:liked:*' | wc -l | xargs -I {} echo "  {} posts with likes in Redis"
+	@echo ""
+	@echo "Supabase ratings:"
+	@psql postgresql://postgres:postgres@localhost:54322/postgres -t -c "SELECT COUNT(*) FROM post_ratings;" 2>/dev/null | xargs -I {} echo "  {} ratings in Supabase"
+	@echo ""
+
+#---------------------------------------------------------------------------
+# PRODUCTION (Upstash + Supabase Cloud)
+#---------------------------------------------------------------------------
+
+prod-verify: ## Verify production sync (Upstash vs Supabase cloud)
+	@echo "$(CYAN)Verifying production sync...$(RESET)"
+	@env $$(cat .env.prod | grep -v '^#' | xargs) npx tsx scripts/verify-production-sync.ts
+
+prod-migrate: ## Migrate counters to production Upstash Redis
+	@echo "$(CYAN)Migrating counters to Upstash...$(RESET)"
+	@env $$(cat .env.prod | grep -v '^#' | xargs) npx tsx scripts/migrate-counters-to-upstash.ts
 
 #---------------------------------------------------------------------------
 # DEVELOPMENT

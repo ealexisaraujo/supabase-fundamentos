@@ -19,7 +19,7 @@
  * @see app/utils/redis/client.ts for Redis client configuration
  */
 
-import { redis, isRedisConfigured } from "./client";
+import { getUpstashClient, isRedisConfigured } from "./client";
 
 /**
  * Cache key generators
@@ -76,6 +76,7 @@ export const cacheTags = {
  * const posts = await getFromCache<Post[]>(cacheKeys.homePosts(0, 10));
  */
 export async function getFromCache<T>(key: string): Promise<T | null> {
+  const redis = await getUpstashClient();
   if (!isRedisConfigured || !redis) {
     return null;
   }
@@ -116,6 +117,7 @@ export async function setInCache<T>(
   ttlSeconds?: number,
   tags?: string[]
 ): Promise<void> {
+  const redis = await getUpstashClient();
   if (!isRedisConfigured || !redis) {
     return;
   }
@@ -132,7 +134,7 @@ export async function setInCache<T>(
 
     // Add key to tag sets for grouped invalidation
     if (tags && tags.length > 0) {
-      await Promise.all(tags.map((tag) => redis!.sadd(tag, key)));
+      await Promise.all(tags.map((tag) => redis.sadd(tag, key)));
     }
 
     const duration = Date.now() - startTime;
@@ -155,6 +157,7 @@ export async function setInCache<T>(
  * await invalidateCache("posts:home:*"); // Invalidate all home post pages
  */
 export async function invalidateCache(pattern: string): Promise<void> {
+  const redis = await getUpstashClient();
   if (!isRedisConfigured || !redis) {
     return;
   }
@@ -199,6 +202,7 @@ export async function invalidateCache(pattern: string): Promise<void> {
  * await invalidateCacheByTag(cacheTags.POSTS); // Invalidate all posts
  */
 export async function invalidateCacheByTag(tag: string): Promise<void> {
+  const redis = await getUpstashClient();
   if (!isRedisConfigured || !redis) {
     return;
   }
@@ -234,6 +238,7 @@ export async function invalidateCacheByTag(tag: string): Promise<void> {
  * await invalidateMultipleTags([cacheTags.POSTS, cacheTags.HOME]);
  */
 export async function invalidateMultipleTags(tags: string[]): Promise<void> {
+  const redis = await getUpstashClient();
   if (!isRedisConfigured || !redis) {
     return;
   }
@@ -247,6 +252,7 @@ export async function invalidateMultipleTags(tags: string[]): Promise<void> {
  * @returns true if Redis is configured and responding
  */
 export async function isRedisAvailable(): Promise<boolean> {
+  const redis = await getUpstashClient();
   if (!isRedisConfigured || !redis) {
     return false;
   }

@@ -5,6 +5,12 @@
  *
  * @example
  * import { getFromCache, setInCache, cacheKeys, cacheTags } from '@/app/utils/redis';
+ *
+ * Counter operations (source of truth for likes):
+ * import { toggleLike, getLikeCounts, getLikedStatuses } from '@/app/utils/redis';
+ *
+ * Background sync to Supabase:
+ * import { syncLikeToSupabase, reconcileCounter } from '@/app/utils/redis';
  */
 
 // Client exports
@@ -22,3 +28,23 @@ export {
   cacheTags,
   cacheTTL,
 } from "./cache";
+
+// Counter exports (source of truth for like counts)
+export {
+  toggleLike,
+  getLikeCount,
+  getLikeCounts,
+  isLikedBySession,
+  getLikedStatuses,
+  syncCounterFromDB,
+  initializeCountersFromDB,
+  counterKeys,
+  type LikeResult,
+} from "./counters";
+
+// Sync exports (background Supabase synchronization)
+export {
+  syncLikeToSupabase,
+  reconcileCounter,
+  reconcileAllCounters,
+} from "./sync";

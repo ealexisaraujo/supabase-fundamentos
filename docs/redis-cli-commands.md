@@ -155,6 +155,116 @@ DBSIZE
 3. **Monitoring**: Use `DBSIZE` and `INFO keyspace` to monitor cache usage
 4. **Debugging**: Use `TTL <key>` to check if keys are expiring correctly
 
+## Counter Commands (Like Counts - Source of Truth)
+
+Redis stores like counts as the source of truth. These keys are separate from cache keys.
+
+### View Like Count for a Post
+
+```bash
+# Get like count for a specific post (replace POST_ID with actual UUID)
+GET post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
+
+# Example output: "446"
+```
+
+### View Who Liked a Post (Set of Session IDs)
+
+```bash
+# Get all session IDs that liked a post
+SMEMBERS post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001
+
+# Example output:
+# 1) "mk1meny8xyz123"
+# 2) "abc123def456"
+```
+
+### Check if a Session Liked a Post
+
+```bash
+# Check if session is in the liked set (returns 1 if yes, 0 if no)
+SISMEMBER post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 mk1meny8xyz123
+
+# Example output: (integer) 1
+```
+
+### View All Posts Liked by a Session
+
+```bash
+# Get all post IDs that a session has liked
+SMEMBERS session:likes:mk1meny8xyz123
+
+# Example output:
+# 1) "50050001-aaaa-bbbb-cccc-ddddeeee0001"
+# 2) "50050001-aaaa-bbbb-cccc-ddddeeee0002"
+```
+
+### Count How Many Sessions Liked a Post
+
+```bash
+# Get the count of unique sessions that liked a post
+SCARD post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001
+
+# Example output: (integer) 446
+```
+
+### List All Counter Keys
+
+```bash
+# List all post like count keys
+KEYS post:likes:*
+
+# List all post liked sets
+KEYS post:liked:*
+
+# List all session likes sets
+KEYS session:likes:*
+```
+
+### Verify Counter Consistency
+
+```bash
+# Compare counter value with set cardinality (should match)
+GET post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
+SCARD post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001
+
+# If these don't match, run reconciliation
+```
+
+### Manual Counter Operations (Use with Caution)
+
+```bash
+# Manually set a counter value
+SET post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001 446
+
+# Increment counter by 1
+INCR post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
+
+# Decrement counter by 1
+DECR post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
+
+# Add a session to liked set
+SADD post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 session123
+
+# Remove a session from liked set
+SREM post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 session123
+```
+
+### Delete Counter Data (Dangerous)
+
+```bash
+# Delete a post's like count
+DEL post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
+
+# Delete a post's liked set
+DEL post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001
+
+# Delete all counter keys (DANGEROUS - will lose all like data!)
+redis-cli --tls -u "redis://default:TOKEN@host:6379" --scan --pattern 'post:likes:*' | xargs -L 1 redis-cli --tls -u "redis://default:TOKEN@host:6379" DEL
+redis-cli --tls -u "redis://default:TOKEN@host:6379" --scan --pattern 'post:liked:*' | xargs -L 1 redis-cli --tls -u "redis://default:TOKEN@host:6379" DEL
+redis-cli --tls -u "redis://default:TOKEN@host:6379" --scan --pattern 'session:likes:*' | xargs -L 1 redis-cli --tls -u "redis://default:TOKEN@host:6379" DEL
+```
+
 ## Cache Key Reference
 
 | Key Pattern | Description | TTL |
@@ -166,6 +276,14 @@ DBSIZE
 | `tag:home` | Set of home cache keys | No TTL |
 | `tag:ranked` | Set of ranked cache keys | No TTL |
 | `tag:profiles` | Set of profile cache keys | No TTL |
+
+## Counter Key Reference
+
+| Key Pattern | Type | Description | TTL |
+|-------------|------|-------------|-----|
+| `post:likes:{postId}` | String (integer) | Like count for a post | No TTL |
+| `post:liked:{postId}` | Set | Session IDs that liked the post | No TTL |
+| `session:likes:{sessionId}` | Set | Post IDs liked by a session | No TTL |
 
 ## Troubleshooting
 

@@ -10,14 +10,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ProfilePost } from "../../utils/cached-profiles";
 import type { Post } from "../../mocks/posts";
 import { PostModal } from "../../components/PostModal";
 import { HeartIcon, GridIcon, PlusIcon } from "../../components/icons";
 import { queryKeys, useAuth } from "../../providers";
-import { supabase } from "../../utils/client";
+import { fetchCountsFromRedis } from "../../utils/posts-with-counts";
 import { useLikeHandler, usePostLikesSubscription } from "../../hooks";
 
 interface ProfileWallProps {
@@ -34,36 +34,54 @@ export default function ProfileWall({ posts: initialPosts, username, avatarUrl, 
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [posts, setPosts] = useState<ProfilePost[]>(initialPosts);
 
-  // Fetch liked status for profile posts
-  const { data: likedMap } = useQuery({
+  // Fetch counts and liked status from Redis
+  // Redis is the source of truth for counters, ensuring consistency across views
+  const { data: redisData } = useQuery({
     queryKey: queryKeys.posts.profileLiked(username, sessionId),
     queryFn: async () => {
-      if (!sessionId || posts.length === 0) return new Map<string, boolean>();
+      if (!sessionId || posts.length === 0) {
+        return { countsMap: new Map<string, number>(), likedMap: new Map<string, boolean>() };
+      }
 
       const postIds = posts.map(p => p.id);
-      const { data } = await supabase
-        .from("post_ratings")
-        .select("post_id")
-        .eq("session_id", sessionId)
-        .in("post_id", postIds);
-
-      const likedSet = new Set(data?.map(r => r.post_id) || []);
-      return new Map<string, boolean>(
-        postIds.map(id => [id, likedSet.has(id)])
-      );
+      return fetchCountsFromRedis(postIds, sessionId);
     },
     enabled: !!sessionId && posts.length > 0,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchOnMount: true, // Always refetch on mount to get fresh counts
   });
 
+  // Also read from global counts cache (updated by other views when liking)
+  const { data: globalCountsData } = useQuery({
+    queryKey: queryKeys.posts.counts(sessionId),
+    queryFn: () => ({ countsMap: new Map<string, number>(), likedMap: new Map<string, boolean>() }),
+    enabled: !!sessionId,
+    staleTime: Infinity, // Never refetch - only updated by setQueryData
+  });
+
+  // Merge counts: prefer global cache (updated by likes in other views)
+  const countsMap = useMemo(() => {
+    const merged = new Map<string, number>(redisData?.countsMap);
+    globalCountsData?.countsMap?.forEach((count, id) => merged.set(id, count));
+    return merged;
+  }, [redisData?.countsMap, globalCountsData?.countsMap]);
+
+  // Merge liked status: prefer global cache (updated by likes in other views)
+  const likedMap = useMemo(() => {
+    const merged = new Map<string, boolean>(redisData?.likedMap);
+    globalCountsData?.likedMap?.forEach((liked, id) => merged.set(id, liked));
+    return merged;
+  }, [redisData?.likedMap, globalCountsData?.likedMap]);
+
   // Convert ProfilePost to Post format for PostModal
-  const convertToPost = (profilePost: ProfilePost, isLiked: boolean): Post => ({
+  // Uses Redis counts for consistency
+  const convertToPost = (profilePost: ProfilePost & { isLiked?: boolean }): Post => ({
     id: profilePost.id,
     image_url: profilePost.image_url,
     caption: profilePost.caption,
-    likes: profilePost.likes,
+    likes: countsMap?.get(profilePost.id) ?? profilePost.likes,
     created_at: new Date(profilePost.created_at),
-    isLiked,
+    isLiked: profilePost.isLiked ?? false,
     user: {
       username,
       avatar: avatarUrl || "https://i.pravatar.cc/40?u=anonymous",
@@ -86,13 +104,14 @@ export default function ProfileWall({ posts: initialPosts, username, avatarUrl, 
     isLikingRef,
   });
 
-  // Posts with liked status
+  // Posts with counts and liked status from Redis
   const postsWithLikedStatus = useMemo(() => {
     return posts.map(post => ({
       ...post,
-      isLiked: likedMap?.get(post.id) || false,
+      likes: countsMap?.get(post.id) ?? post.likes,
+      isLiked: likedMap?.get(post.id) ?? false,
     }));
-  }, [posts, likedMap]);
+  }, [posts, countsMap, likedMap]);
 
   if (posts.length === 0) {
     return (
@@ -124,7 +143,7 @@ export default function ProfileWall({ posts: initialPosts, username, avatarUrl, 
         {postsWithLikedStatus.map((post) => (
           <button
             key={post.id}
-            onClick={() => setSelectedPost(convertToPost(post, post.isLiked))}
+            onClick={() => setSelectedPost(convertToPost(post))}
             className="aspect-square relative group overflow-hidden bg-card-bg"
           >
             <Image
