@@ -170,7 +170,12 @@ export function PostCard({ post, onLike, showComments = true }: PostCardProps) {
         )}
 
         {/* Comments Section */}
-        {showComments && <CommentsSection postId={String(post.id)} />}
+        {showComments && (
+          <CommentsSection
+            postId={String(post.id)}
+            initialCommentCount={post.comments_count ?? 0}
+          />
+        )}
       </div>
     </article>
   );

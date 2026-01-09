@@ -92,10 +92,13 @@ export async function getPostsWithLikeStatus(
     return result.slice(start, end);
   }
 
-  // Build query
+  // Build query - include comment count using Supabase aggregation
   let query = supabase
     .from("posts_new")
-    .select("*");
+    .select(`
+      *,
+      comments(count)
+    `);
 
   // Apply minLikes filter if specified
   if (minLikes !== undefined) {
@@ -125,9 +128,17 @@ export async function getPostsWithLikeStatus(
   const postIds = data.map((post) => post.id);
   const likedMap = await getSessionLikes(postIds, sessionId);
 
-  // Merge liked status into posts
-  return data.map((post) => ({
-    ...post,
-    isLiked: likedMap.get(post.id) || false,
-  }));
+  // Merge liked status into posts and extract comment count
+  return data.map((post) => {
+    // Extract comment count - Supabase returns { comments: [{ count: N }] }
+    const commentsData = post.comments as { count: number }[] | undefined;
+    const comments_count = commentsData?.[0]?.count ?? 0;
+
+    return {
+      ...post,
+      isLiked: likedMap.get(post.id) || false,
+      comments_count,
+      comments: undefined, // Remove the nested comments array
+    };
+  });
 }

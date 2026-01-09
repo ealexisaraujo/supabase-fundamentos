@@ -19,6 +19,8 @@ export interface Post {
     avatar_url: string | null;
     full_name: string | null;
   } | null;
+  // Comment count (populated from server cache to avoid N+1 queries)
+  comments_count?: number;
 }
 
 // Lista unificada de posts para home y ranking

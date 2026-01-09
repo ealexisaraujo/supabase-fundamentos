@@ -77,7 +77,8 @@ async function fetchHomePosts(page: number = 0, limit: number = 10): Promise<Pos
   const from = page * limit
   const to = from + limit - 1
 
-  // Fetch posts with joined profile data for authenticated posts
+  // Fetch posts with joined profile data and comment count
+  // Using comments(count) to get the count in a single query (avoids N+1)
   const { data, error } = await supabase
     .from('posts_new')
     .select(`
@@ -86,7 +87,8 @@ async function fetchHomePosts(page: number = 0, limit: number = 10): Promise<Pos
         username,
         avatar_url,
         full_name
-      )
+      ),
+      comments(count)
     `)
     .order('created_at', { ascending: false })
     .range(from, to)
@@ -98,10 +100,19 @@ async function fetchHomePosts(page: number = 0, limit: number = 10): Promise<Pos
 
   // Transform the data to ensure profile is a single object (not array)
   // Supabase returns joined data that may be array or object depending on relationship
-  const posts = (data || []).map(post => ({
-    ...post,
-    profile: Array.isArray(post.profile) ? post.profile[0] || null : post.profile
-  }))
+  // Also extract comment count from nested structure: comments: [{ count: N }]
+  const posts = (data || []).map(post => {
+    // Extract comment count - Supabase returns { comments: [{ count: N }] }
+    const commentsData = post.comments as { count: number }[] | undefined
+    const comments_count = commentsData?.[0]?.count ?? 0
+
+    return {
+      ...post,
+      profile: Array.isArray(post.profile) ? post.profile[0] || null : post.profile,
+      comments_count,
+      comments: undefined, // Remove the nested comments array from response
+    }
+  })
 
   console.log(`[CachedPosts] Fetched ${posts.length} home posts from Supabase`)
   return posts
@@ -125,7 +136,7 @@ async function fetchRankedPosts(): Promise<Post[]> {
 
   const supabase = getSupabaseClient()
 
-  // Fetch ranked posts with joined profile data
+  // Fetch ranked posts with joined profile data and comment count
   const { data, error } = await supabase
     .from('posts_new')
     .select(`
@@ -134,7 +145,8 @@ async function fetchRankedPosts(): Promise<Post[]> {
         username,
         avatar_url,
         full_name
-      )
+      ),
+      comments(count)
     `)
     .gt('likes', 5)
     .order('likes', { ascending: false })
@@ -145,10 +157,19 @@ async function fetchRankedPosts(): Promise<Post[]> {
   }
 
   // Transform the data to ensure profile is a single object (not array)
-  const posts = (data || []).map(post => ({
-    ...post,
-    profile: Array.isArray(post.profile) ? post.profile[0] || null : post.profile
-  }))
+  // Also extract comment count from nested structure: comments: [{ count: N }]
+  const posts = (data || []).map(post => {
+    // Extract comment count - Supabase returns { comments: [{ count: N }] }
+    const commentsData = post.comments as { count: number }[] | undefined
+    const comments_count = commentsData?.[0]?.count ?? 0
+
+    return {
+      ...post,
+      profile: Array.isArray(post.profile) ? post.profile[0] || null : post.profile,
+      comments_count,
+      comments: undefined, // Remove the nested comments array from response
+    }
+  })
 
   console.log(`[CachedPosts] Fetched ${posts.length} ranked posts from Supabase`)
   return posts
