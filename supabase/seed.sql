@@ -39,7 +39,7 @@ INSERT INTO auth.users (
         'authenticated',
         'authenticated',
         'maria@example.com',
-        '$2a$10$PznXiVH2Y7ZGCE9xBcWJFuJbVVnRQKpYlOEj.xb1fkI6K/pAqQyCy', -- password123
+        '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', -- password123
         NOW(),
         '{"provider": "email", "providers": ["email"]}',
         '{"full_name": "Maria Garcia"}',
@@ -57,7 +57,7 @@ INSERT INTO auth.users (
         'authenticated',
         'authenticated',
         'carlos@example.com',
-        '$2a$10$PznXiVH2Y7ZGCE9xBcWJFuJbVVnRQKpYlOEj.xb1fkI6K/pAqQyCy', -- password123
+        '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', -- password123
         NOW(),
         '{"provider": "email", "providers": ["email"]}',
         '{"full_name": "Carlos Rodriguez"}',
@@ -75,7 +75,7 @@ INSERT INTO auth.users (
         'authenticated',
         'authenticated',
         'ana@example.com',
-        '$2a$10$PznXiVH2Y7ZGCE9xBcWJFuJbVVnRQKpYlOEj.xb1fkI6K/pAqQyCy', -- password123
+        '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', -- password123
         NOW(),
         '{"provider": "email", "providers": ["email"]}',
         '{"full_name": "Ana Martinez"}',
@@ -93,7 +93,7 @@ INSERT INTO auth.users (
         'authenticated',
         'authenticated',
         'pedro@example.com',
-        '$2a$10$PznXiVH2Y7ZGCE9xBcWJFuJbVVnRQKpYlOEj.xb1fkI6K/pAqQyCy', -- password123
+        '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', -- password123
         NOW(),
         '{"provider": "email", "providers": ["email"]}',
         '{"full_name": "Pedro Sanchez"}',
@@ -111,7 +111,7 @@ INSERT INTO auth.users (
         'authenticated',
         'authenticated',
         'lucia@example.com',
-        '$2a$10$PznXiVH2Y7ZGCE9xBcWJFuJbVVnRQKpYlOEj.xb1fkI6K/pAqQyCy', -- password123
+        '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', -- password123
         NOW(),
         '{"provider": "email", "providers": ["email"]}',
         '{"full_name": "Lucia Fernandez"}',
