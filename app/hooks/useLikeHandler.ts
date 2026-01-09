@@ -127,6 +127,7 @@ export function useLikeHandler<T extends PostLike = Post>({
       // Update countsMap and likedMap in TanStack Query cache
       // Update BOTH the view-specific cache AND the global shared cache
       const globalCountsKey = queryKeys.posts.counts(sessionId);
+
       const updateCache = (old: CountsAndLikedResult | undefined) => {
         const countsMap = old?.countsMap ? new Map(old.countsMap) : new Map<string, number>();
         const likedMapCopy = old?.likedMap ? new Map(old.likedMap) : new Map<string, boolean>();
@@ -134,9 +135,13 @@ export function useLikeHandler<T extends PostLike = Post>({
         // Update liked status
         likedMapCopy.set(postIdStr, !currentlyLiked);
 
-        // Update count optimistically
-        const currentCount = countsMap.get(postIdStr) ?? 0;
-        countsMap.set(postIdStr, currentlyLiked ? currentCount - 1 : currentCount + 1);
+        // Update count optimistically ONLY if we have a valid count in the cache
+        // This prevents showing 1 or -1 when countsMap hasn't loaded yet
+        const existingCount = countsMap.get(postIdStr);
+        if (existingCount !== undefined) {
+          countsMap.set(postIdStr, currentlyLiked ? existingCount - 1 : existingCount + 1);
+        }
+        // If no count in cache, don't set anything - the server response will update it
 
         return { countsMap, likedMap: likedMapCopy };
       };

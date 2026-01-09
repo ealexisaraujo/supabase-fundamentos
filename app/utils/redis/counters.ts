@@ -79,6 +79,20 @@ export async function toggleLike(
     const likedSetKey = counterKeys.postLiked(postId);
     const sessionLikesKey = counterKeys.sessionLikes(sessionId);
 
+    // Check if counter exists in Redis, if not initialize from Supabase
+    const existingCount = await redis.get<number>(likeKey);
+    if (existingCount === null) {
+      console.log(`[RedisCounter] Counter not found for post ${postId}, initializing from Supabase`);
+      const { data } = await supabase
+        .from("posts_new")
+        .select("likes")
+        .eq("id", postId)
+        .single();
+      const initialCount = data?.likes ?? 0;
+      await redis.set(likeKey, initialCount);
+      console.log(`[RedisCounter] Initialized counter to ${initialCount}`);
+    }
+
     // Check if session already liked this post
     const isCurrentlyLiked = await redis.sismember(likedSetKey, sessionId);
 
