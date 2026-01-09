@@ -56,8 +56,9 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
 
   // Fetch counts and liked status from Redis with TanStack Query caching
   // Redis is the source of truth for counters, ensuring consistency across views
+  // IMPORTANT: Include posts.length in query key so it refetches when new posts load via infinite scroll
   const { data: redisData, isLoading: isLikedStatusLoading } = useQuery({
-    queryKey: queryKeys.posts.liked(sessionId),
+    queryKey: [...queryKeys.posts.liked(sessionId), posts.length],
     queryFn: async () => {
       if (!sessionId || posts.length === 0) {
         return { countsMap: new Map<string, number>(), likedMap: new Map<string, boolean>() };
