@@ -4,9 +4,11 @@
 
 When users like or unlike a post, the like counter briefly displays **incorrect intermediate values** before settling to the correct final count. The counter appears to update in the **opposite direction** momentarily, creating a confusing visual glitch.
 
-**Status**: Open
+**Status**: Fixed ✅
 **Severity**: Medium
 **Date Identified**: 2026-01-08
+**Date Fixed**: 2026-01-09
+**Fix**: Atomic RPC function + isLikingRef guard (see [LIKE_COUNTER_ARCHITECTURE_FIX.md](./LIKE_COUNTER_ARCHITECTURE_FIX.md))
 **Environment**: Production (https://supabase-fundamentos-dun.vercel.app/)
 
 ---
