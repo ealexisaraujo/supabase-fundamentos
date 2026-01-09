@@ -905,7 +905,7 @@ SET session_replication_role = replica;
 -- PostgreSQL database dump
 --
 
--- \restrict MrW5aue2XBp4ncQXUuCIcKlB9haUicrd5q0UsGEWSaEyTsXLolCpK2LspvdgTf6
+-- \restrict uCZPC9cQZ7aZQQF0rbeAgWYsaPnbSDsVrjuT5bZGuUHtjjQGjhpSEhNKsEQ3qm2
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -927,7 +927,9 @@ SET row_security = off;
 --
 
 INSERT INTO "auth"."audit_log_entries" ("instance_id", "id", "payload", "created_at", "ip_address") VALUES
-	('00000000-0000-0000-0000-000000000000', '1b66e7bc-bbc9-4953-afcb-4c4da302298a', '{"action":"login","actor_id":"e5555555-5555-5555-5555-555555555555","actor_name":"Lucia Fernandez","actor_username":"lucia@example.com","actor_via_sso":false,"log_type":"account","traits":{"provider":"email"}}', '2026-01-09 03:10:59.248253+00', '');
+	('00000000-0000-0000-0000-000000000000', '1b66e7bc-bbc9-4953-afcb-4c4da302298a', '{"action":"login","actor_id":"e5555555-5555-5555-5555-555555555555","actor_name":"Lucia Fernandez","actor_username":"lucia@example.com","actor_via_sso":false,"log_type":"account","traits":{"provider":"email"}}', '2026-01-09 03:10:59.248253+00', ''),
+	('00000000-0000-0000-0000-000000000000', 'bb6964e0-12d9-4789-a98c-8b8c03f4b77e', '{"action":"login","actor_id":"a1111111-1111-1111-1111-111111111111","actor_name":"Maria Garcia","actor_username":"maria@example.com","actor_via_sso":false,"log_type":"account","traits":{"provider":"email"}}', '2026-01-09 03:28:41.981616+00', ''),
+	('00000000-0000-0000-0000-000000000000', 'ae55b182-04e5-4a40-a5a0-d61df7f8f404', '{"action":"login","actor_id":"e5555555-5555-5555-5555-555555555555","actor_name":"Lucia Fernandez","actor_username":"lucia@example.com","actor_via_sso":false,"log_type":"account","traits":{"provider":"email"}}', '2026-01-09 03:39:50.97352+00', '');
 
 
 --
@@ -941,11 +943,11 @@ INSERT INTO "auth"."audit_log_entries" ("instance_id", "id", "payload", "created
 --
 
 INSERT INTO "auth"."users" ("instance_id", "id", "aud", "role", "email", "encrypted_password", "email_confirmed_at", "invited_at", "confirmation_token", "confirmation_sent_at", "recovery_token", "recovery_sent_at", "email_change_token_new", "email_change", "email_change_sent_at", "last_sign_in_at", "raw_app_meta_data", "raw_user_meta_data", "is_super_admin", "created_at", "updated_at", "phone", "phone_confirmed_at", "phone_change", "phone_change_token", "phone_change_sent_at", "email_change_token_current", "email_change_confirm_status", "banned_until", "reauthentication_token", "reauthentication_sent_at", "is_sso_user", "deleted_at", "is_anonymous") VALUES
-	('00000000-0000-0000-0000-000000000000', 'a1111111-1111-1111-1111-111111111111', 'authenticated', 'authenticated', 'maria@example.com', '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', '2026-01-09 03:10:51.333212+00', NULL, '', NULL, '', NULL, '', '', NULL, NULL, '{"provider": "email", "providers": ["email"]}', '{"full_name": "Maria Garcia"}', NULL, '2025-12-10 03:10:51.333212+00', '2026-01-09 03:10:51.333212+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
 	('00000000-0000-0000-0000-000000000000', 'b2222222-2222-2222-2222-222222222222', 'authenticated', 'authenticated', 'carlos@example.com', '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', '2026-01-09 03:10:51.333212+00', NULL, '', NULL, '', NULL, '', '', NULL, NULL, '{"provider": "email", "providers": ["email"]}', '{"full_name": "Carlos Rodriguez"}', NULL, '2025-12-15 03:10:51.333212+00', '2026-01-09 03:10:51.333212+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
 	('00000000-0000-0000-0000-000000000000', 'c3333333-3333-3333-3333-333333333333', 'authenticated', 'authenticated', 'ana@example.com', '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', '2026-01-09 03:10:51.333212+00', NULL, '', NULL, '', NULL, '', '', NULL, NULL, '{"provider": "email", "providers": ["email"]}', '{"full_name": "Ana Martinez"}', NULL, '2025-12-20 03:10:51.333212+00', '2026-01-09 03:10:51.333212+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
 	('00000000-0000-0000-0000-000000000000', 'd4444444-4444-4444-4444-444444444444', 'authenticated', 'authenticated', 'pedro@example.com', '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', '2026-01-09 03:10:51.333212+00', NULL, '', NULL, '', NULL, '', '', NULL, NULL, '{"provider": "email", "providers": ["email"]}', '{"full_name": "Pedro Sanchez"}', NULL, '2025-12-25 03:10:51.333212+00', '2026-01-09 03:10:51.333212+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
-	('00000000-0000-0000-0000-000000000000', 'e5555555-5555-5555-5555-555555555555', 'authenticated', 'authenticated', 'lucia@example.com', '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', '2026-01-09 03:10:51.333212+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-01-09 03:10:59.252158+00', '{"provider": "email", "providers": ["email"]}', '{"full_name": "Lucia Fernandez"}', NULL, '2025-12-30 03:10:51.333212+00', '2026-01-09 03:10:59.261718+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false);
+	('00000000-0000-0000-0000-000000000000', 'a1111111-1111-1111-1111-111111111111', 'authenticated', 'authenticated', 'maria@example.com', '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', '2026-01-09 03:10:51.333212+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-01-09 03:28:41.982352+00', '{"provider": "email", "providers": ["email"]}', '{"full_name": "Maria Garcia"}', NULL, '2025-12-10 03:10:51.333212+00', '2026-01-09 03:28:41.984575+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false),
+	('00000000-0000-0000-0000-000000000000', 'e5555555-5555-5555-5555-555555555555', 'authenticated', 'authenticated', 'lucia@example.com', '$2a$10$S7ztLySShNS9oamUIaiON.nh2iiKwazuBDghTSNFLDkfgGTgtjwyC', '2026-01-09 03:10:51.333212+00', NULL, '', NULL, '', NULL, '', '', NULL, '2026-01-09 03:39:50.974281+00', '{"provider": "email", "providers": ["email"]}', '{"full_name": "Lucia Fernandez"}', NULL, '2025-12-30 03:10:51.333212+00', '2026-01-09 03:39:50.97631+00', NULL, NULL, '', '', NULL, '', 0, NULL, '', NULL, false, NULL, false);
 
 
 --
@@ -977,7 +979,9 @@ INSERT INTO "auth"."identities" ("provider_id", "user_id", "identity_data", "pro
 --
 
 INSERT INTO "auth"."sessions" ("id", "user_id", "created_at", "updated_at", "factor_id", "aal", "not_after", "refreshed_at", "user_agent", "ip", "tag", "oauth_client_id", "refresh_token_hmac_key", "refresh_token_counter", "scopes") VALUES
-	('2bae6e26-788f-4f9d-9701-b9a83764e18d', 'e5555555-5555-5555-5555-555555555555', '2026-01-09 03:10:59.252206+00', '2026-01-09 03:10:59.252206+00', NULL, 'aal1', NULL, NULL, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36', '172.21.0.1', NULL, NULL, NULL, NULL, NULL);
+	('2bae6e26-788f-4f9d-9701-b9a83764e18d', 'e5555555-5555-5555-5555-555555555555', '2026-01-09 03:10:59.252206+00', '2026-01-09 03:10:59.252206+00', NULL, 'aal1', NULL, NULL, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36', '172.21.0.1', NULL, NULL, NULL, NULL, NULL),
+	('5b557edc-ce2b-4c6d-9654-7845ff73b1c5', 'a1111111-1111-1111-1111-111111111111', '2026-01-09 03:28:41.982414+00', '2026-01-09 03:28:41.982414+00', NULL, 'aal1', NULL, NULL, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36', '172.21.0.1', NULL, NULL, NULL, NULL, NULL),
+	('048673ea-a7f0-48cc-984b-18cbf7ce60db', 'e5555555-5555-5555-5555-555555555555', '2026-01-09 03:39:50.97435+00', '2026-01-09 03:39:50.97435+00', NULL, 'aal1', NULL, NULL, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36', '172.21.0.1', NULL, NULL, NULL, NULL, NULL);
 
 
 --
@@ -985,7 +989,9 @@ INSERT INTO "auth"."sessions" ("id", "user_id", "created_at", "updated_at", "fac
 --
 
 INSERT INTO "auth"."mfa_amr_claims" ("session_id", "created_at", "updated_at", "authentication_method", "id") VALUES
-	('2bae6e26-788f-4f9d-9701-b9a83764e18d', '2026-01-09 03:10:59.262389+00', '2026-01-09 03:10:59.262389+00', 'password', '32836b76-d344-48d1-a43a-650b564802d4');
+	('2bae6e26-788f-4f9d-9701-b9a83764e18d', '2026-01-09 03:10:59.262389+00', '2026-01-09 03:10:59.262389+00', 'password', '32836b76-d344-48d1-a43a-650b564802d4'),
+	('5b557edc-ce2b-4c6d-9654-7845ff73b1c5', '2026-01-09 03:28:41.984893+00', '2026-01-09 03:28:41.984893+00', 'password', 'e7d23b23-ec05-49e5-b0ef-dbf59d321774'),
+	('048673ea-a7f0-48cc-984b-18cbf7ce60db', '2026-01-09 03:39:50.976573+00', '2026-01-09 03:39:50.976573+00', 'password', '757edb40-7c56-410d-9496-099a5ff24e65');
 
 
 --
@@ -1029,7 +1035,9 @@ INSERT INTO "auth"."mfa_amr_claims" ("session_id", "created_at", "updated_at", "
 --
 
 INSERT INTO "auth"."refresh_tokens" ("instance_id", "id", "token", "user_id", "revoked", "created_at", "updated_at", "parent", "session_id") VALUES
-	('00000000-0000-0000-0000-000000000000', 1, 'nskggakaaf7p', 'e5555555-5555-5555-5555-555555555555', false, '2026-01-09 03:10:59.25839+00', '2026-01-09 03:10:59.25839+00', NULL, '2bae6e26-788f-4f9d-9701-b9a83764e18d');
+	('00000000-0000-0000-0000-000000000000', 1, 'nskggakaaf7p', 'e5555555-5555-5555-5555-555555555555', false, '2026-01-09 03:10:59.25839+00', '2026-01-09 03:10:59.25839+00', NULL, '2bae6e26-788f-4f9d-9701-b9a83764e18d'),
+	('00000000-0000-0000-0000-000000000000', 2, 'k63ky67v4lqu', 'a1111111-1111-1111-1111-111111111111', false, '2026-01-09 03:28:41.983822+00', '2026-01-09 03:28:41.983822+00', NULL, '5b557edc-ce2b-4c6d-9654-7845ff73b1c5'),
+	('00000000-0000-0000-0000-000000000000', 3, 'spuehbsrfpg3', 'e5555555-5555-5555-5555-555555555555', false, '2026-01-09 03:39:50.975599+00', '2026-01-09 03:39:50.975599+00', NULL, '048673ea-a7f0-48cc-984b-18cbf7ce60db');
 
 
 --
@@ -1076,7 +1084,6 @@ INSERT INTO "public"."posts_new" ("id", "user_id", "image_url", "caption", "like
 	('10010001-aaaa-bbbb-cccc-ddddeeee0001', 'a1111111-1111-1111-1111-111111111111', 'https://picsum.photos/seed/maria1/600/600', 'Atardecer magico en Santorini. Los colores del cielo griego son increibles', 127, '2026-01-02 03:10:51.333212+00', '2026-01-02 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}', 'a1111111-1111-1111-1111-111111111111'),
 	('10010002-aaaa-bbbb-cccc-ddddeeee0002', 'a1111111-1111-1111-1111-111111111111', 'https://picsum.photos/seed/maria2/600/600', 'Explorando las calles de Tokyo. La fusion de lo antiguo y moderno me fascina', 89, '2026-01-04 03:10:51.333212+00', '2026-01-04 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}', 'a1111111-1111-1111-1111-111111111111'),
 	('10010003-aaaa-bbbb-cccc-ddddeeee0003', 'a1111111-1111-1111-1111-111111111111', 'https://picsum.photos/seed/maria3/600/600', 'Machu Picchu al amanecer. Un sueno hecho realidad', 234, '2026-01-06 03:10:51.333212+00', '2026-01-06 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}', 'a1111111-1111-1111-1111-111111111111'),
-	('10010004-aaaa-bbbb-cccc-ddddeeee0004', 'a1111111-1111-1111-1111-111111111111', 'https://picsum.photos/seed/maria4/600/600', 'Perdida en las calles de Marrakech', 56, '2026-01-08 03:10:51.333212+00', '2026-01-08 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}', 'a1111111-1111-1111-1111-111111111111'),
 	('20020001-aaaa-bbbb-cccc-ddddeeee0001', 'b2222222-2222-2222-2222-222222222222', 'https://picsum.photos/seed/carlos1/600/600', 'Cumbre del Aconcagua. 6962 metros de pura adrenalina', 312, '2025-12-30 03:10:51.333212+00', '2025-12-30 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=carlos_adventure", "username": "carlos_adventure"}', 'b2222222-2222-2222-2222-222222222222'),
 	('20020002-aaaa-bbbb-cccc-ddddeeee0002', 'b2222222-2222-2222-2222-222222222222', 'https://picsum.photos/seed/carlos2/600/600', 'Kayak en los fiordos noruegos. Agua cristalina y montanas imponentes', 178, '2026-01-03 03:10:51.333212+00', '2026-01-03 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=carlos_adventure", "username": "carlos_adventure"}', 'b2222222-2222-2222-2222-222222222222'),
 	('20020003-aaaa-bbbb-cccc-ddddeeee0003', 'b2222222-2222-2222-2222-222222222222', 'https://picsum.photos/seed/carlos3/600/600', 'Camping bajo las estrellas en Patagonia', 145, '2026-01-07 03:10:51.333212+00', '2026-01-07 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=carlos_adventure", "username": "carlos_adventure"}', 'b2222222-2222-2222-2222-222222222222'),
@@ -1084,13 +1091,14 @@ INSERT INTO "public"."posts_new" ("id", "user_id", "image_url", "caption", "like
 	('30030002-aaaa-bbbb-cccc-ddddeeee0002', 'c3333333-3333-3333-3333-333333333333', 'https://picsum.photos/seed/ana2/600/600', 'Tacos al pastor en Mexico DF. Sabor autentico', 156, '2026-01-05 03:10:51.333212+00', '2026-01-05 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=ana_foodie", "username": "ana_foodie"}', 'c3333333-3333-3333-3333-333333333333'),
 	('40040001-aaaa-bbbb-cccc-ddddeeee0001', 'd4444444-4444-4444-4444-444444444444', 'https://picsum.photos/seed/pedro1/600/600', 'Skyline de Hong Kong desde Victoria Peak', 267, '2025-12-31 03:10:51.333212+00', '2025-12-31 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=pedro_urban", "username": "pedro_urban"}', 'd4444444-4444-4444-4444-444444444444'),
 	('40040002-aaaa-bbbb-cccc-ddddeeee0002', 'd4444444-4444-4444-4444-444444444444', 'https://picsum.photos/seed/pedro2/600/600', 'Graffiti en las calles de Berlin. Arte urbano en su maxima expresion', 134, '2026-01-06 03:10:51.333212+00', '2026-01-06 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=pedro_urban", "username": "pedro_urban"}', 'd4444444-4444-4444-4444-444444444444'),
-	('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'e5555555-5555-5555-5555-555555555555', 'https://picsum.photos/seed/lucia1/600/600', 'Oso polar en su habitat natural. Momento magico en el Artico', 445, '2025-12-28 03:10:51.333212+00', '2025-12-28 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}', 'e5555555-5555-5555-5555-555555555555'),
-	('50050002-aaaa-bbbb-cccc-ddddeeee0002', 'e5555555-5555-5555-5555-555555555555', 'https://picsum.photos/seed/lucia2/600/600', 'Aurora boreal en Islandia. La naturaleza nos regala espectaculos unicos', 389, '2026-01-04 03:10:51.333212+00', '2026-01-04 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}', 'e5555555-5555-5555-5555-555555555555'),
-	('50050003-aaaa-bbbb-cccc-ddddeeee0003', 'e5555555-5555-5555-5555-555555555555', 'https://picsum.photos/seed/lucia3/600/600', 'Cascada escondida en Costa Rica. Verde infinito', 198, '2026-01-07 03:10:51.333212+00', '2026-01-07 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}', 'e5555555-5555-5555-5555-555555555555'),
 	('00000001-aaaa-bbbb-cccc-ddddeeee0001', NULL, 'https://picsum.photos/seed/anon1/600/600', 'Foto anonima desde algun lugar del mundo', 23, '2025-12-25 03:10:51.333212+00', '2025-12-25 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=anonymous1", "username": "viajero_anonimo"}', NULL),
-	('00000002-aaaa-bbbb-cccc-ddddeeee0002', NULL, 'https://picsum.photos/seed/anon2/600/600', 'Capturando momentos sin identidad', 45, '2025-12-26 03:10:51.333212+00', '2025-12-26 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=anonymous2", "username": "fotografo_misterioso"}', NULL),
 	('00000003-aaaa-bbbb-cccc-ddddeeee0003', NULL, 'https://picsum.photos/seed/anon3/600/600', 'La belleza esta en todas partes', 67, '2025-12-27 03:10:51.333212+00', '2025-12-27 03:10:51.333212+00', '{"avatar": "https://i.pravatar.cc/150?u=anonymous3", "username": "observador_silencioso"}', NULL),
-	('30030003-aaaa-bbbb-cccc-ddddeeee0003', 'c3333333-3333-3333-3333-333333333333', 'https://picsum.photos/seed/ana3/600/600', 'Croissant recien horneado en Paris. Perfeccion francesa', 204, '2026-01-08 03:10:51.333212+00', '2026-01-09 03:12:38.361221+00', '{"avatar": "https://i.pravatar.cc/150?u=ana_foodie", "username": "ana_foodie"}', 'c3333333-3333-3333-3333-333333333333');
+	('30030003-aaaa-bbbb-cccc-ddddeeee0003', 'c3333333-3333-3333-3333-333333333333', 'https://picsum.photos/seed/ana3/600/600', 'Croissant recien horneado en Paris. Perfeccion francesa', 204, '2026-01-08 03:10:51.333212+00', '2026-01-09 03:12:38.361221+00', '{"avatar": "https://i.pravatar.cc/150?u=ana_foodie", "username": "ana_foodie"}', 'c3333333-3333-3333-3333-333333333333'),
+	('10010004-aaaa-bbbb-cccc-ddddeeee0004', 'a1111111-1111-1111-1111-111111111111', 'https://picsum.photos/seed/maria4/600/600', 'Perdida en las calles de Marrakech', 56, '2026-01-08 03:10:51.333212+00', '2026-01-09 03:31:42.430479+00', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}', 'a1111111-1111-1111-1111-111111111111'),
+	('00000002-aaaa-bbbb-cccc-ddddeeee0002', NULL, 'https://picsum.photos/seed/anon2/600/600', 'Capturando momentos sin identidad', 46, '2025-12-26 03:10:51.333212+00', '2026-01-09 03:35:19.813535+00', '{"avatar": "https://i.pravatar.cc/150?u=anonymous2", "username": "fotografo_misterioso"}', NULL),
+	('50050003-aaaa-bbbb-cccc-ddddeeee0003', 'e5555555-5555-5555-5555-555555555555', 'https://picsum.photos/seed/lucia3/600/600', 'Cascada escondida en Costa Rica. Verde infinito', 199, '2026-01-07 03:10:51.333212+00', '2026-01-09 03:40:36.640497+00', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}', 'e5555555-5555-5555-5555-555555555555'),
+	('50050002-aaaa-bbbb-cccc-ddddeeee0002', 'e5555555-5555-5555-5555-555555555555', 'https://picsum.photos/seed/lucia2/600/600', 'Aurora boreal en Islandia. La naturaleza nos regala espectaculos unicos', 390, '2026-01-04 03:10:51.333212+00', '2026-01-09 03:40:39.97711+00', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}', 'e5555555-5555-5555-5555-555555555555'),
+	('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'e5555555-5555-5555-5555-555555555555', 'https://picsum.photos/seed/lucia1/600/600', 'Oso polar en su habitat natural. Momento magico en el Artico', 446, '2025-12-28 03:10:51.333212+00', '2026-01-09 03:40:42.926473+00', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}', 'e5555555-5555-5555-5555-555555555555');
 
 
 --
@@ -1146,7 +1154,11 @@ INSERT INTO "public"."post_ratings" ("id", "post_id", "session_id", "created_at"
 	('cbca6b70-5e8b-4000-a1b7-ec3a55fd209f', '30030003-aaaa-bbbb-cccc-ddddeeee0003', 'session-lucia-001', '2026-01-09 03:10:51.333212+00'),
 	('b9b6635b-d275-4e84-b296-d79d07062a23', '30030003-aaaa-bbbb-cccc-ddddeeee0003', 'session-maria-001', '2026-01-09 03:10:51.333212+00'),
 	('77c1e5b6-b1ef-4468-a1df-5762e7ed3c65', '30030003-aaaa-bbbb-cccc-ddddeeee0003', 'session-carlos-001', '2026-01-09 03:10:51.333212+00'),
-	('697d75b7-466c-4759-9611-a594258b1f46', '30030003-aaaa-bbbb-cccc-ddddeeee0003', 'mk30jlvh-024c5b82-cbab-46db-9c23-6a7efef847c0', '2026-01-09 03:12:38.361221+00');
+	('697d75b7-466c-4759-9611-a594258b1f46', '30030003-aaaa-bbbb-cccc-ddddeeee0003', 'mk30jlvh-024c5b82-cbab-46db-9c23-6a7efef847c0', '2026-01-09 03:12:38.361221+00'),
+	('5ec1fbd9-2bc1-48c5-9dd3-0882525e9bb6', '00000002-aaaa-bbbb-cccc-ddddeeee0002', 'mk1p8rc2-a8c08297-ad0e-41d3-b68b-050ca81ea6b1', '2026-01-09 03:35:19.813535+00'),
+	('c13585f6-c28a-45d4-8afd-424e23b46bfc', '50050003-aaaa-bbbb-cccc-ddddeeee0003', 'mk1p8rc2-a8c08297-ad0e-41d3-b68b-050ca81ea6b1', '2026-01-09 03:40:36.640497+00'),
+	('b2f81eea-910c-4215-8f9d-6273df902d9a', '50050002-aaaa-bbbb-cccc-ddddeeee0002', 'mk1p8rc2-a8c08297-ad0e-41d3-b68b-050ca81ea6b1', '2026-01-09 03:40:39.97711+00'),
+	('51ad091a-8513-4b4d-a9b6-4b207781dc2a', '50050001-aaaa-bbbb-cccc-ddddeeee0001', 'mk1p8rc2-a8c08297-ad0e-41d3-b68b-050ca81ea6b1', '2026-01-09 03:40:42.926473+00');
 
 
 --
@@ -1219,7 +1231,7 @@ INSERT INTO "public"."post_ratings" ("id", "post_id", "session_id", "created_at"
 -- Name: refresh_tokens_id_seq; Type: SEQUENCE SET; Schema: auth; Owner: supabase_auth_admin
 --
 
-SELECT pg_catalog.setval('"auth"."refresh_tokens_id_seq"', 1, true);
+SELECT pg_catalog.setval('"auth"."refresh_tokens_id_seq"', 3, true);
 
 
 --
@@ -1233,6 +1245,6 @@ SELECT pg_catalog.setval('"supabase_functions"."hooks_id_seq"', 1, false);
 -- PostgreSQL database dump complete
 --
 
--- \unrestrict MrW5aue2XBp4ncQXUuCIcKlB9haUicrd5q0UsGEWSaEyTsXLolCpK2LspvdgTf6
+-- \unrestrict uCZPC9cQZ7aZQQF0rbeAgWYsaPnbSDsVrjuT5bZGuUHtjjQGjhpSEhNKsEQ3qm2
 
 RESET ALL;
