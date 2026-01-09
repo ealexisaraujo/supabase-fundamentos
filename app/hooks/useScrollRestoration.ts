@@ -43,26 +43,31 @@ export function useScrollRestoration({ key }: UseScrollRestorationOptions) {
 
   // Use regular useEffect for scroll saving (doesn't need to block paint)
   useEffect(() => {
-    // Save scroll position on scroll (throttled)
-    // We do NOT save on cleanup because Next.js may have already reset
-    // the scroll position by the time React's cleanup runs.
-    // The throttled scroll handler saves frequently enough to capture the position.
-    let ticking = false;
+    // Save scroll position with debounce to avoid capturing navigation resets.
+    // When user clicks a navigation link, Next.js resets scroll position which
+    // fires a scroll event. Using a 150ms debounce ensures that:
+    // 1. User scrolls → debounce timer starts
+    // 2. If navigation happens within 150ms, component unmounts and timer is cleared
+    // 3. The rapid scroll reset during navigation never gets saved
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
     const handleScroll = () => {
-      if (!ticking) {
-        requestAnimationFrame(() => {
-          sessionStorage.setItem(storageKey, String(window.scrollY));
-          ticking = false;
-        });
-        ticking = true;
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
       }
+      debounceTimer = setTimeout(() => {
+        sessionStorage.setItem(storageKey, String(window.scrollY));
+        debounceTimer = null;
+      }, 150);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
       window.removeEventListener("scroll", handleScroll);
-      // Note: Intentionally NOT saving on cleanup - scroll may already be reset
     };
   }, [storageKey]);
 }
