@@ -62,6 +62,7 @@ export function RankGrid({ initialPosts }: RankGridProps) {
         minLikes: 5,
         orderBy: "likes",
         ascending: false,
+        limit: 100, // Fetch liked status for all ranked posts, not just first 10
       });
 
       // Create a map of post ID to liked status
