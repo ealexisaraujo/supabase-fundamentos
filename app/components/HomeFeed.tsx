@@ -29,7 +29,7 @@ import { PostCardSkeleton } from "./Skeletons";
 import { ThemeToggle } from "./ThemeToggle";
 import Link from "next/link";
 import { useAuth, queryKeys } from "../providers";
-import { useLikeHandler, usePostLikesSubscription } from "../hooks";
+import { useLikeHandler, usePostLikesSubscription, useScrollRestoration } from "../hooks";
 
 interface HomeFeedProps {
   /** Initial posts from server-side cached fetch */
@@ -38,6 +38,9 @@ interface HomeFeedProps {
 
 export function HomeFeed({ initialPosts }: HomeFeedProps) {
   const router = useRouter();
+
+  // Preserve scroll position across navigation
+  useScrollRestoration({ key: "home-feed" });
 
   // Auth state and sessionId from centralized provider
   const { user, isLoading: isAuthLoading, signOut, sessionId } = useAuth();

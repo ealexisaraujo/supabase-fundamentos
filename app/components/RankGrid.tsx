@@ -26,7 +26,7 @@ import { RankItemSkeleton } from "./Skeletons";
 import { HeartIcon } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
 import { queryKeys, useAuth } from "../providers";
-import { useLikeHandler, usePostLikesSubscription } from "../hooks";
+import { useLikeHandler, usePostLikesSubscription, useScrollRestoration } from "../hooks";
 import { BLUR_DATA_URL } from "../constants";
 
 interface RankGridProps {
@@ -35,6 +35,9 @@ interface RankGridProps {
 }
 
 export function RankGrid({ initialPosts }: RankGridProps) {
+  // Preserve scroll position across navigation
+  useScrollRestoration({ key: "rank-grid" });
+
   // Get sessionId from centralized provider
   const { sessionId } = useAuth();
 
