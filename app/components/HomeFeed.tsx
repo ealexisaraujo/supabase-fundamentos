@@ -227,10 +227,21 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   }, [hasMore, loadingMore, page, fetchMorePosts, sessionId]);
 
   // Subscribe to real-time updates for like counts
+  // Uses isLiking ref to prevent race conditions with optimistic updates
+  const isLikingRef = useRef(isLiking);
+  isLikingRef.current = isLiking;
+
   useEffect(() => {
     console.log("[HomeFeed] Setting up real-time subscription for likes");
 
     const unsubscribe = subscribeToPostLikes((update) => {
+      // Skip real-time updates for posts that are currently being liked/unliked
+      // This prevents the "flash" bug where the counter briefly shows wrong values
+      if (isLikingRef.current.has(update.postId)) {
+        console.log(`[HomeFeed] Skipping real-time update for post ${update.postId} (optimistic update in progress)`);
+        return;
+      }
+
       console.log(`[HomeFeed] Real-time like update received - post: ${update.postId}, likes: ${update.likes}`);
       setPosts((prevPosts) =>
         prevPosts.map((post) =>

@@ -11,6 +11,7 @@ const { mockSupabase } = vi.hoisted(() => {
     eq: vi.fn(() => mock),
     in: vi.fn(() => mock),
     single: vi.fn(() => Promise.resolve({ data: null, error: null })),
+    rpc: vi.fn(() => Promise.resolve({ data: null, error: null })),
     channel: vi.fn(() => ({
       on: vi.fn().mockReturnThis(),
       subscribe: vi.fn().mockReturnThis(),
@@ -41,39 +42,65 @@ describe('Rating Functions', () => {
     })
 
     it('should add a like when post is not already liked', async () => {
-      // Mock: post not liked yet
-      mockSupabase.single.mockResolvedValueOnce({ data: null, error: null })
-      // Mock: insert succeeds
-      mockSupabase.insert.mockReturnValue({
-        ...mockSupabase,
-        then: (fn: Function) => fn({ error: null }),
-      })
-      // Mock: get current likes
-      mockSupabase.single.mockResolvedValueOnce({ data: { likes: 5 }, error: null })
-      // Mock: update succeeds
-      mockSupabase.update.mockReturnValue({
-        ...mockSupabase,
-        eq: vi.fn(() => Promise.resolve({ error: null })),
+      // Mock: RPC returns success with isLiked true (added like)
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: { success: true, isLiked: true, newLikeCount: 6 },
+        error: null,
       })
 
       const result = await togglePostLike('post-123', 'session-456')
 
-      expect(mockSupabase.from).toHaveBeenCalledWith('post_ratings')
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('toggle_post_like', {
+        p_post_id: 'post-123',
+        p_session_id: 'session-456',
+      })
+      expect(result.success).toBe(true)
+      expect(result.isLiked).toBe(true)
+      expect(result.newLikeCount).toBe(6)
+    })
+
+    it('should remove a like when post is already liked', async () => {
+      // Mock: RPC returns success with isLiked false (removed like)
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: { success: true, isLiked: false, newLikeCount: 5 },
+        error: null,
+      })
+
+      const result = await togglePostLike('post-123', 'session-456')
+
+      expect(mockSupabase.rpc).toHaveBeenCalledWith('toggle_post_like', {
+        p_post_id: 'post-123',
+        p_session_id: 'session-456',
+      })
+      expect(result.success).toBe(true)
+      expect(result.isLiked).toBe(false)
+      expect(result.newLikeCount).toBe(5)
     })
 
     it('should handle unique constraint violation gracefully', async () => {
-      // Mock: post not liked yet
-      mockSupabase.single.mockResolvedValueOnce({ data: null, error: null })
-      // Mock: insert fails with unique constraint
-      mockSupabase.insert.mockReturnValue({
-        ...mockSupabase,
-        then: (fn: Function) => fn({ error: { code: '23505', message: 'duplicate' } }),
+      // Mock: RPC returns the race condition error from the database
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: { success: false, isLiked: true, newLikeCount: 0, error: 'Already liked this post' },
+        error: null,
       })
 
       const result = await togglePostLike('post-123', 'session-456')
 
-      // Should handle the race condition
-      expect(mockSupabase.insert).toHaveBeenCalled()
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Already liked this post')
+    })
+
+    it('should handle RPC errors', async () => {
+      // Mock: RPC returns an error
+      mockSupabase.rpc.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Database connection error' },
+      })
+
+      const result = await togglePostLike('post-123', 'session-456')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Database connection error')
     })
   })
 
@@ -123,13 +150,17 @@ describe('Rating Constraints', () => {
     expect(true).toBe(true)
   })
 
-  it('should use atomic operations for like count updates', () => {
-    // This test documents that likes are updated atomically:
+  it('should use atomic RPC function for like count updates', () => {
+    // This test documents that likes are now updated atomically using an RPC function:
+    // The toggle_post_like RPC function handles everything in a single transaction:
     // 1. Check if rating exists
     // 2. Insert/delete rating
     // 3. Update post likes count
     //
-    // Real-time sync ensures all clients see the final count
+    // This eliminates race conditions and the "flash" bug where the counter
+    // would briefly show incorrect values during like/unlike operations.
+    //
+    // Real-time sync ensures all clients see the final count via a single UPDATE event.
     expect(true).toBe(true)
   })
 })
