@@ -356,8 +356,144 @@ The implementation maintains backward compatibility with existing comments:
 | Profile requirement | None | `profile_id IS NOT NULL` |
 | Accountability | Anonymous | Linked to user profile |
 
+## Comment Count Caching Fix (2026-01-08)
+
+### Problem
+
+After implementing authenticated comments, a UX issue was observed: when navigating between Home/Rank/Profile pages, the comment count would **flash from 0 to the actual count** (e.g., 0 → 2).
+
+### Root Cause Analysis
+
+The issue was caused by a data flow gap:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. SERVER CACHE (cached-posts.ts)                               │
+│    - Fetched: id, image_url, caption, likes, profile            │
+│    - MISSING: comment count ❌                                   │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. CLIENT (CommentsSection.tsx)                                 │
+│    - Initialized: commentCount = 0 (default prop)               │
+│    - useEffect fetched real count → updated to 2                │
+│    - Brief flash: 0 → 2 ⚡                                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Unlike `likes` (which worked correctly because TanStack Query cached the liked status), comment counts had **no caching** - they were fetched fresh on every component mount.
+
+### Solution
+
+Include `comments_count` in the server cache query to eliminate client-side fetch:
+
+#### 1. Updated Post Interface (`app/mocks/posts.ts`)
+
+```typescript
+export interface Post {
+  // ... existing fields
+  comments_count?: number;  // NEW - from server cache
+}
+```
+
+#### 2. Updated Server Queries (`app/utils/cached-posts.ts`)
+
+Added `comments(count)` to Supabase queries:
+
+```typescript
+const { data } = await supabase
+  .from('posts_new')
+  .select(`
+    id, image_url, caption, likes, user, user_id, profile_id, created_at,
+    profile:profiles (username, avatar_url, full_name),
+    comments(count)  // NEW - aggregate count
+  `)
+  .order('created_at', { ascending: false })
+
+// Extract count from Supabase response: { comments: [{ count: N }] }
+const posts = data.map(post => {
+  const commentsData = post.comments as { count: number }[] | undefined;
+  const comments_count = commentsData?.[0]?.count ?? 0;
+  return { ...post, comments_count, comments: undefined };
+});
+```
+
+#### 3. Updated Client Queries (`app/utils/posts.ts`)
+
+Same pattern for infinite scroll fetch:
+
+```typescript
+const { data } = await supabase
+  .from("posts_new")
+  .select(`*, comments(count)`)
+  // ... rest of query
+
+// Extract and merge comment count
+return data.map(post => ({
+  ...post,
+  comments_count: post.comments?.[0]?.count ?? 0,
+  comments: undefined,
+}));
+```
+
+#### 4. Pass to CommentsSection (`app/components/PostCard.tsx`)
+
+```tsx
+<CommentsSection
+  postId={String(post.id)}
+  initialCommentCount={post.comments_count ?? 0}  // Pass server-cached count
+/>
+```
+
+### New Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ SERVER CACHE (with comments_count)                              │
+│    - Returns: { ..., comments_count: 2 }                        │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ CLIENT (CommentsSection)                                        │
+│    - Receives: initialCommentCount={2}                          │
+│    - Renders "2 comments" immediately ✓                         │
+│    - No flash!                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `app/mocks/posts.ts` | Added `comments_count?: number` to Post interface |
+| `app/utils/cached-posts.ts` | Added `comments(count)` to both `fetchHomePosts` and `fetchRankedPosts` queries |
+| `app/utils/posts.ts` | Added `comments(count)` to `getPostsWithLikeStatus` (infinite scroll) |
+| `app/components/PostCard.tsx` | Pass `initialCommentCount={post.comments_count ?? 0}` |
+
+### Benefits
+
+1. **No more flash**: Comment count displays immediately from server cache
+2. **Reduced API calls**: Eliminates N separate `getCommentCount()` calls (1 per post)
+3. **Consistent with likes**: Follows same pattern as `likes` field
+4. **Redis cached**: Count is included in Redis cache for sub-millisecond access
+
+### Fallback Behavior
+
+If `comments_count` is not present (e.g., stale cache), `CommentsSection` still fetches the count on mount as a fallback:
+
+```typescript
+// CommentsSection.tsx - fallback for posts without cached count
+useEffect(() => {
+  if (hasLoadedCountRef.current) return;
+  hasLoadedCountRef.current = true;
+  getCommentCount(postId).then(setCommentCount);
+}, [postId]);
+```
+
 ## Related Documentation
 
 - [COMMENTS_FEATURE.md](./COMMENTS_FEATURE.md) - Original comments implementation
+- [004-redis-caching.md](./004-redis-caching.md) - Redis caching architecture
+- [CLIENT_CACHING_ARCHITECTURE.md](./CLIENT_CACHING_ARCHITECTURE.md) - TanStack Query caching
 - [CLAUDE.md](../CLAUDE.md) - Project architecture overview
 - [Supabase RLS Documentation](https://supabase.com/docs/guides/auth/row-level-security)
