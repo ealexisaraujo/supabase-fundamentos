@@ -1,8 +1,41 @@
 import { supabase } from "./client";
 import { comments as mockComments } from "../mocks/comments";
-import type { Comment, CreateCommentInput, UpdateCommentInput } from "../types/comment";
+import type { Comment, CommentProfile, CreateCommentInput, UpdateCommentInput } from "../types/comment";
 
 const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
+
+/**
+ * Get the current user's profile for commenting
+ * Returns null if user is not authenticated or has no profile
+ */
+export async function getCurrentUserProfile(): Promise<CommentProfile | null> {
+  if (USE_MOCKS) {
+    return {
+      id: "mock-profile-id",
+      username: "mockuser",
+      avatar_url: "https://i.pravatar.cc/40?u=mockuser",
+    };
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return null;
+  }
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("id, username, avatar_url")
+    .eq("id", user.id)
+    .single();
+
+  if (error || !profile) {
+    console.error("Error fetching user profile for comments:", error);
+    return null;
+  }
+
+  return profile;
+}
 
 export async function getCommentsByPostId(postId: string): Promise<Comment[]> {
   if (USE_MOCKS) {
@@ -12,7 +45,14 @@ export async function getCommentsByPostId(postId: string): Promise<Comment[]> {
 
   const { data, error } = await supabase
     .from("comments")
-    .select("*")
+    .select(`
+      *,
+      profile:profiles (
+        id,
+        username,
+        avatar_url
+      )
+    `)
     .eq("post_id", postId)
     .order("created_at", { ascending: true });
 
@@ -48,9 +88,14 @@ export async function createComment(input: CreateCommentInput): Promise<Comment 
     const newComment: Comment = {
       id: crypto.randomUUID(),
       post_id: input.post_id,
-      user_id: input.user_id || null,
+      user_id: input.user_id,
+      profile_id: input.profile_id,
       content: input.content,
-      user: input.user || { username: "anonymous", avatar: "https://i.pravatar.cc/40?u=anonymous" },
+      profile: {
+        id: input.profile_id,
+        username: "mockuser",
+        avatar_url: "https://i.pravatar.cc/40?u=mockuser",
+      },
       created_at: new Date(),
       updated_at: new Date(),
     };
@@ -58,17 +103,30 @@ export async function createComment(input: CreateCommentInput): Promise<Comment 
     return newComment;
   }
 
+  // Require authentication - user_id and profile_id are mandatory
+  if (!input.user_id || !input.profile_id) {
+    console.error("Authentication required: user_id and profile_id must be provided");
+    return null;
+  }
+
   const commentData = {
     post_id: input.post_id,
     content: input.content,
-    user_id: input.user_id || null,
-    user: input.user || { username: "anonymous", avatar: "https://i.pravatar.cc/40?u=anonymous" },
+    user_id: input.user_id,
+    profile_id: input.profile_id,
   };
 
   const { data, error } = await supabase
     .from("comments")
     .insert(commentData)
-    .select()
+    .select(`
+      *,
+      profile:profiles (
+        id,
+        username,
+        avatar_url
+      )
+    `)
     .single();
 
   if (error) {

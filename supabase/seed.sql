@@ -281,31 +281,31 @@ ON CONFLICT (id) DO NOTHING;
 
 -- =============================================================================
 -- 5. COMMENTS
--- Comments on various posts
+-- Comments on various posts (with user_id and profile_id for authenticated comments)
 -- =============================================================================
-INSERT INTO public.comments (post_id, content, "user") VALUES
+INSERT INTO public.comments (post_id, user_id, profile_id, content, "user") VALUES
     -- Comments on Maria's Machu Picchu post (most liked)
-    ('10010003-aaaa-bbbb-cccc-ddddeeee0003', 'Increible foto! Siempre he querido ir', '{"avatar": "https://i.pravatar.cc/150?u=carlos_adventure", "username": "carlos_adventure"}'),
-    ('10010003-aaaa-bbbb-cccc-ddddeeee0003', 'Los colores del amanecer son espectaculares', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}'),
-    ('10010003-aaaa-bbbb-cccc-ddddeeee0003', 'Que camara usaste?', '{"avatar": "https://i.pravatar.cc/150?u=pedro_urban", "username": "pedro_urban"}'),
+    ('10010003-aaaa-bbbb-cccc-ddddeeee0003', 'b2222222-2222-2222-2222-222222222222', 'b2222222-2222-2222-2222-222222222222', 'Increible foto! Siempre he querido ir', '{"avatar": "https://i.pravatar.cc/150?u=carlos_adventure", "username": "carlos_adventure"}'),
+    ('10010003-aaaa-bbbb-cccc-ddddeeee0003', 'e5555555-5555-5555-5555-555555555555', 'e5555555-5555-5555-5555-555555555555', 'Los colores del amanecer son espectaculares', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}'),
+    ('10010003-aaaa-bbbb-cccc-ddddeeee0003', 'd4444444-4444-4444-4444-444444444444', 'd4444444-4444-4444-4444-444444444444', 'Que camara usaste?', '{"avatar": "https://i.pravatar.cc/150?u=pedro_urban", "username": "pedro_urban"}'),
 
     -- Comments on Carlos's Aconcagua post
-    ('20020001-aaaa-bbbb-cccc-ddddeeee0001', 'Que valiente! Felicitaciones por la cumbre', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}'),
-    ('20020001-aaaa-bbbb-cccc-ddddeeee0001', 'El paisaje es impresionante', '{"avatar": "https://i.pravatar.cc/150?u=ana_foodie", "username": "ana_foodie"}'),
+    ('20020001-aaaa-bbbb-cccc-ddddeeee0001', 'a1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'Que valiente! Felicitaciones por la cumbre', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}'),
+    ('20020001-aaaa-bbbb-cccc-ddddeeee0001', 'c3333333-3333-3333-3333-333333333333', 'c3333333-3333-3333-3333-333333333333', 'El paisaje es impresionante', '{"avatar": "https://i.pravatar.cc/150?u=ana_foodie", "username": "ana_foodie"}'),
 
     -- Comments on Lucia's polar bear post
-    ('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'Wow! Como lograste acercarte tanto?', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}'),
-    ('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'Foto del ano sin duda', '{"avatar": "https://i.pravatar.cc/150?u=carlos_adventure", "username": "carlos_adventure"}'),
-    ('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'Hermoso animal', '{"avatar": "https://i.pravatar.cc/150?u=pedro_urban", "username": "pedro_urban"}'),
-    ('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'Naturaleza pura', '{"avatar": "https://i.pravatar.cc/150?u=ana_foodie", "username": "ana_foodie"}'),
+    ('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'a1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'Wow! Como lograste acercarte tanto?', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}'),
+    ('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'b2222222-2222-2222-2222-222222222222', 'b2222222-2222-2222-2222-222222222222', 'Foto del ano sin duda', '{"avatar": "https://i.pravatar.cc/150?u=carlos_adventure", "username": "carlos_adventure"}'),
+    ('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'd4444444-4444-4444-4444-444444444444', 'd4444444-4444-4444-4444-444444444444', 'Hermoso animal', '{"avatar": "https://i.pravatar.cc/150?u=pedro_urban", "username": "pedro_urban"}'),
+    ('50050001-aaaa-bbbb-cccc-ddddeeee0001', 'c3333333-3333-3333-3333-333333333333', 'c3333333-3333-3333-3333-333333333333', 'Naturaleza pura', '{"avatar": "https://i.pravatar.cc/150?u=ana_foodie", "username": "ana_foodie"}'),
 
     -- Comments on Ana's croissant post
-    ('30030003-aaaa-bbbb-cccc-ddddeeee0003', 'Se ve delicioso!', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}'),
-    ('30030003-aaaa-bbbb-cccc-ddddeeee0003', 'Paris siempre tiene la mejor pasteleria', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}'),
+    ('30030003-aaaa-bbbb-cccc-ddddeeee0003', 'e5555555-5555-5555-5555-555555555555', 'e5555555-5555-5555-5555-555555555555', 'Se ve delicioso!', '{"avatar": "https://i.pravatar.cc/150?u=lucia_nature", "username": "lucia_nature"}'),
+    ('30030003-aaaa-bbbb-cccc-ddddeeee0003', 'a1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'Paris siempre tiene la mejor pasteleria', '{"avatar": "https://i.pravatar.cc/150?u=maria_garcia", "username": "maria_garcia"}'),
 
     -- Comments on Pedro's Hong Kong post
-    ('40040001-aaaa-bbbb-cccc-ddddeeee0001', 'La vista es increible de noche', '{"avatar": "https://i.pravatar.cc/150?u=ana_foodie", "username": "ana_foodie"}'),
-    ('40040001-aaaa-bbbb-cccc-ddddeeee0001', 'Hong Kong es otra dimension', '{"avatar": "https://i.pravatar.cc/150?u=carlos_adventure", "username": "carlos_adventure"}')
+    ('40040001-aaaa-bbbb-cccc-ddddeeee0001', 'c3333333-3333-3333-3333-333333333333', 'c3333333-3333-3333-3333-333333333333', 'La vista es increible de noche', '{"avatar": "https://i.pravatar.cc/150?u=ana_foodie", "username": "ana_foodie"}'),
+    ('40040001-aaaa-bbbb-cccc-ddddeeee0001', 'b2222222-2222-2222-2222-222222222222', 'b2222222-2222-2222-2222-222222222222', 'Hong Kong es otra dimension', '{"avatar": "https://i.pravatar.cc/150?u=carlos_adventure", "username": "carlos_adventure"}')
 ON CONFLICT (id) DO NOTHING;
 
 -- =============================================================================

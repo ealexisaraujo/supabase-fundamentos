@@ -1,25 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ReactNode } from "react";
 import CommentsSection from "../app/components/CommentsSection";
 
-// Mock the comments service
+// Mock the AuthProvider - no external variable references in factory
+vi.mock("../app/providers/AuthProvider", () => ({
+  useAuth: vi.fn(() => ({
+    user: { id: "test-user-id", email: "test@example.com" },
+    session: { user: { id: "test-user-id", email: "test@example.com" } },
+    isLoading: false,
+    signOut: vi.fn(),
+    refreshSession: vi.fn(),
+  })),
+}));
+
+// Mock the comments service - no external variable references in factory
 vi.mock("../app/utils/comments", () => ({
   getCommentsByPostId: vi.fn().mockResolvedValue([
     {
       id: "comment-1",
       post_id: "post-1",
-      user_id: null,
+      user_id: "user-1",
+      profile_id: "profile-1",
       content: "First comment",
-      user: { username: "user1", avatar: "https://example.com/avatar1.png" },
+      profile: { id: "profile-1", username: "user1", avatar_url: "https://example.com/avatar1.png" },
       created_at: new Date(),
       updated_at: new Date(),
     },
     {
       id: "comment-2",
       post_id: "post-1",
-      user_id: null,
+      user_id: "user-2",
+      profile_id: "profile-2",
       content: "Second comment",
-      user: { username: "user2", avatar: "https://example.com/avatar2.png" },
+      profile: { id: "profile-2", username: "user2", avatar_url: "https://example.com/avatar2.png" },
       created_at: new Date(),
       updated_at: new Date(),
     },
@@ -28,11 +42,17 @@ vi.mock("../app/utils/comments", () => ({
   createComment: vi.fn().mockResolvedValue({
     id: "new-comment",
     post_id: "post-1",
-    user_id: null,
+    user_id: "test-user-id",
+    profile_id: "test-profile-id",
     content: "New comment",
-    user: { username: "anonymous", avatar: "https://i.pravatar.cc/40?u=anonymous" },
+    profile: { id: "test-profile-id", username: "testuser", avatar_url: "https://example.com/avatar.png" },
     created_at: new Date(),
     updated_at: new Date(),
+  }),
+  getCurrentUserProfile: vi.fn().mockResolvedValue({
+    id: "test-profile-id",
+    username: "testuser",
+    avatar_url: "https://example.com/avatar.png",
   }),
 }));
 
@@ -120,6 +140,8 @@ describe("CommentsSection", () => {
       expect(createComment).toHaveBeenCalledWith({
         post_id: "post-1",
         content: "New comment",
+        user_id: "test-user-id",
+        profile_id: "test-profile-id",
       });
     });
   });

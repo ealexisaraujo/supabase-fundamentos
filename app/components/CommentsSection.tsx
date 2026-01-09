@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { getTimeAgo } from "../utils/time";
 import {
   getCommentsByPostId,
   getCommentCount,
   createComment,
+  getCurrentUserProfile,
 } from "../utils/comments";
-import type { Comment } from "../types/comment";
+import { useAuth } from "../providers/AuthProvider";
+import type { Comment, CommentProfile } from "../types/comment";
 import { CommentSkeleton } from "./Skeletons";
 
 function CommentIcon() {
@@ -54,22 +57,34 @@ interface CommentItemProps {
 }
 
 function CommentItem({ comment }: CommentItemProps) {
+  // Prefer profile data (from FK join), fallback to legacy user JSONB
+  const displayName = comment.profile?.username || comment.user?.username || "Anonymous";
+  const avatarUrl = comment.profile?.avatar_url || comment.user?.avatar || "https://i.pravatar.cc/32?u=anonymous";
+
   return (
     <div className="flex items-start gap-2 py-2">
-      <div className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-border flex-shrink-0">
-        <Image
-          src={comment.user?.avatar || "https://i.pravatar.cc/32?u=anonymous"}
-          alt={comment.user?.username || "Anonymous"}
-          fill
-          sizes="32px"
-          className="object-cover"
-        />
-      </div>
+      <Link
+        href={comment.profile ? `/profile/${displayName}` : "#"}
+        className={comment.profile ? "cursor-pointer" : "cursor-default"}
+      >
+        <div className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-border flex-shrink-0">
+          <Image
+            src={avatarUrl}
+            alt={displayName}
+            fill
+            sizes="32px"
+            className="object-cover"
+          />
+        </div>
+      </Link>
       <div className="flex-1 min-w-0">
         <p className="text-sm">
-          <span className="font-semibold text-foreground">
-            {comment.user?.username || "Anonymous"}
-          </span>{" "}
+          <Link
+            href={comment.profile ? `/profile/${displayName}` : "#"}
+            className={`font-semibold text-foreground ${comment.profile ? "hover:underline" : ""}`}
+          >
+            {displayName}
+          </Link>{" "}
           <span className="text-foreground/80">{comment.content}</span>
         </p>
         <span className="text-xs text-foreground/50">
@@ -91,14 +106,27 @@ export default function CommentsSection({
   initialCommentCount = 0,
   initiallyExpanded = false,
 }: CommentsSectionProps) {
+  const { user, isLoading: authLoading } = useAuth();
   const [comments, setComments] = useState<Comment[]>([]);
   const [isExpanded, setIsExpanded] = useState(initiallyExpanded);
   const [newComment, setNewComment] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [commentCount, setCommentCount] = useState(initialCommentCount);
+  const [userProfile, setUserProfile] = useState<CommentProfile | null>(null);
   const hasLoadedRef = useRef(false);
   const hasLoadedCountRef = useRef(false);
+  const hasLoadedProfileRef = useRef(false);
+
+  // Fetch user's profile when authenticated
+  useEffect(() => {
+    if (hasLoadedProfileRef.current || authLoading) return;
+
+    if (user) {
+      hasLoadedProfileRef.current = true;
+      getCurrentUserProfile().then(setUserProfile);
+    }
+  }, [user, authLoading]);
 
   // Fetch comment count on mount to display accurate initial count
   useEffect(() => {
@@ -136,11 +164,19 @@ export default function CommentsSection({
     e.preventDefault();
     if (!newComment.trim() || isSubmitting) return;
 
+    // Require authentication
+    if (!user || !userProfile) {
+      console.error("Authentication required to comment");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const comment = await createComment({
         post_id: postId,
         content: newComment.trim(),
+        user_id: user.id,
+        profile_id: userProfile.id,
       });
 
       if (comment) {
@@ -196,26 +232,46 @@ export default function CommentsSection({
             </p>
           )}
 
-          {/* Add comment form */}
-          <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
-            <input
-              type="text"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment..."
-              className="flex-1 px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
-              disabled={isSubmitting}
-              maxLength={500}
-            />
-            <button
-              type="submit"
-              disabled={!newComment.trim() || isSubmitting}
-              className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Send comment"
-            >
-              <SendIcon />
-            </button>
-          </form>
+          {/* Add comment form - only for authenticated users */}
+          {user && userProfile ? (
+            <form onSubmit={handleSubmit} className="mt-3 flex gap-2">
+              <div className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-border flex-shrink-0">
+                <Image
+                  src={userProfile.avatar_url || "https://i.pravatar.cc/32?u=default"}
+                  alt={userProfile.username}
+                  fill
+                  sizes="32px"
+                  className="object-cover"
+                />
+              </div>
+              <input
+                type="text"
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Add a comment..."
+                className="flex-1 px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                disabled={isSubmitting}
+                maxLength={500}
+              />
+              <button
+                type="submit"
+                disabled={!newComment.trim() || isSubmitting}
+                className="px-3 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="Send comment"
+              >
+                <SendIcon />
+              </button>
+            </form>
+          ) : (
+            <div className="mt-3 p-3 bg-card-bg rounded-lg border border-border text-center">
+              <p className="text-sm text-foreground/60">
+                <Link href="/auth/login" className="text-primary hover:underline font-medium">
+                  Login
+                </Link>{" "}
+                to add a comment
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
