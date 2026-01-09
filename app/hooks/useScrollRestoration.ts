@@ -44,6 +44,9 @@ export function useScrollRestoration({ key }: UseScrollRestorationOptions) {
   // Use regular useEffect for scroll saving (doesn't need to block paint)
   useEffect(() => {
     // Save scroll position on scroll (throttled)
+    // We do NOT save on cleanup because Next.js may have already reset
+    // the scroll position by the time React's cleanup runs.
+    // The throttled scroll handler saves frequently enough to capture the position.
     let ticking = false;
     const handleScroll = () => {
       if (!ticking) {
@@ -58,9 +61,8 @@ export function useScrollRestoration({ key }: UseScrollRestorationOptions) {
     window.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => {
-      // Save final position on unmount
-      sessionStorage.setItem(storageKey, String(window.scrollY));
       window.removeEventListener("scroll", handleScroll);
+      // Note: Intentionally NOT saving on cleanup - scroll may already be reset
     };
   }, [storageKey]);
 }
