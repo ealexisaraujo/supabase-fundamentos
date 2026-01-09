@@ -119,6 +119,8 @@ export const queryKeys = {
     home: (sessionId: string, page: number) =>
       ["posts", "home", sessionId, page] as const,
     ranked: (sessionId: string) => ["posts", "ranked", sessionId] as const,
+    profileLiked: (username: string, sessionId: string) =>
+      ["posts", "profile", username, "liked", sessionId] as const,
   },
   comments: {
     all: ["comments"] as const,

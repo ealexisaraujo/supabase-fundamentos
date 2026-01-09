@@ -158,6 +158,7 @@ export default function ProfileClientPage({ initialProfile }: { initialProfile: 
           <ProfileWall
             posts={profile.posts || []}
             username={profile.username}
+            avatarUrl={profile.avatar_url}
             isOwner={isOwner}
           />
         </div>
