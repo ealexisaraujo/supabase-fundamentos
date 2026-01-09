@@ -4,9 +4,19 @@
 
 This document outlines the next-level architecture for implementing queues and background tasks in Suplatzigram using Supabase's native capabilities. The goal is to improve scalability, reliability, and user experience by offloading work to background processes.
 
-**Status**: Planning
+**Status**: Phase 2 In Progress ✅
 **Date**: 2026-01-08
+**Updated**: 2026-01-09
 **Prerequisites**: Like counter bug fix completed (see [LIKE_COUNTER_ARCHITECTURE_FIX.md](./LIKE_COUNTER_ARCHITECTURE_FIX.md))
+
+### Implementation Progress
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Enable pgmq | ✅ Complete | Extension enabled, queues created |
+| Phase 2: Enqueue Events | ✅ Complete | `toggle_post_like` enqueues rich metadata |
+| Phase 3: Edge Functions | ⏳ Pending | Next step |
+| Phase 4: pg_cron | ⏳ Pending | Requires Edge Functions first |
 
 ---
 
@@ -519,13 +529,18 @@ PERFORM pgmq.delete('notifications', msg.msg_id);
 ## Implementation Checklist
 
 ### Phase 1: Foundation
-- [ ] Enable pgmq extension in Supabase
+- [x] Enable pgmq extension in Supabase
 - [ ] Enable pg_cron extension
 - [ ] Enable pg_net extension (for HTTP calls)
-- [ ] Create base queues (notifications, analytics)
+- [x] Create base queues (like_events, notifications, analytics)
 
 ### Phase 2: Core Features
-- [ ] Update toggle_post_like to enqueue events
+- [x] Update toggle_post_like to enqueue events with rich metadata:
+  - `event_type`: 'like' | 'unlike'
+  - `event_value`: +1 | -1
+  - `post_id`, `post_owner_id`, `post_caption`
+  - `liker_session_id`, `liker_profile_id`
+  - `new_like_count`, `timestamp`, `metadata`
 - [ ] Create process-notifications Edge Function
 - [ ] Create process-analytics Edge Function
 - [ ] Set up pg_cron schedules
