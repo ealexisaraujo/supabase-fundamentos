@@ -4,11 +4,13 @@
 
 When users like or unlike a post, the like counter briefly displays **incorrect intermediate values** before settling to the correct final count. The counter appears to update in the **opposite direction** momentarily, creating a confusing visual glitch.
 
-**Status**: Fixed ✅
+**Status**: Fixed ✅ (Verified in Production)
 **Severity**: Medium
 **Date Identified**: 2026-01-08
 **Date Fixed**: 2026-01-09
-**Fix**: Atomic RPC function + isLikingRef guard (see [LIKE_COUNTER_ARCHITECTURE_FIX.md](./LIKE_COUNTER_ARCHITECTURE_FIX.md))
+**Root Cause**: Frontend - optimistic update read `post.isLiked` from stale state instead of `likedMap`
+**Fix**: Use `likedMap` (TanStack Query cache) as source of truth for optimistic updates
+**Files Changed**: `HomeFeed.tsx`, `RankGrid.tsx`
 **Environment**: Production (https://supabase-fundamentos-dun.vercel.app/)
 
 ---
