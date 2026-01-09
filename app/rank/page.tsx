@@ -20,15 +20,9 @@
 import { getCachedRankedPosts } from "../utils/cached-posts";
 import { RankGrid } from "../components/RankGrid";
 
-// Debug: Log when this server component renders
-console.log("[Rank Page] Server Component rendering - fetching cached ranked posts");
-
 export default async function RankPage() {
   // Fetch ranked posts from cache (or Supabase if cache miss)
-  // This reduces database hits significantly - cached for 5 minutes
   const initialPosts = await getCachedRankedPosts();
-
-  console.log(`[Rank Page] Passing ${initialPosts.length} cached ranked posts to RankGrid`);
 
   // Pass cached data to client component for interactive features
   return <RankGrid initialPosts={initialPosts} />;

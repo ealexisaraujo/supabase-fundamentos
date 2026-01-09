@@ -10,16 +10,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useMemo, useRef, useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { ProfilePost } from "../../utils/cached-profiles";
 import type { Post } from "../../mocks/posts";
 import { PostModal } from "../../components/PostModal";
 import { HeartIcon, GridIcon, PlusIcon } from "../../components/icons";
-import { getSessionId } from "../../utils/session";
-import { togglePostLike, subscribeToPostLikes } from "../../utils/ratings";
-import { queryKeys } from "../../providers";
+import { queryKeys, useAuth } from "../../providers";
 import { supabase } from "../../utils/client";
+import { useLikeHandler, usePostLikesSubscription } from "../../hooks";
 
 interface ProfileWallProps {
   posts: ProfilePost[];
@@ -29,11 +28,11 @@ interface ProfileWallProps {
 }
 
 export default function ProfileWall({ posts: initialPosts, username, avatarUrl, isOwner }: ProfileWallProps) {
-  const queryClient = useQueryClient();
+  // Get sessionId from centralized provider
+  const { sessionId } = useAuth();
+
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [posts, setPosts] = useState<ProfilePost[]>(initialPosts);
-  const [sessionId] = useState<string>(() => getSessionId());
-  const [isLiking, setIsLiking] = useState<Set<string>>(new Set());
 
   // Fetch liked status for profile posts
   const { data: likedMap } = useQuery({
@@ -71,99 +70,21 @@ export default function ProfileWall({ posts: initialPosts, username, avatarUrl, 
     },
   });
 
-  // Handle like/unlike with optimistic updates
-  const handleLike = async (postId: string) => {
-    if (isLiking.has(postId)) return;
+  // Centralized like handling with optimistic updates
+  const { handleLike, isLikingRef } = useLikeHandler<ProfilePost>({
+    sessionId,
+    queryKey: queryKeys.posts.profileLiked(username, sessionId),
+    setPosts,
+    setSelectedPost,
+    likedMap,
+  });
 
-    const currentlyLiked = likedMap?.get(postId) ?? false;
-
-    // Optimistic update for posts state
-    setPosts((prevPosts) =>
-      prevPosts.map((post) =>
-        post.id === postId
-          ? { ...post, likes: currentlyLiked ? post.likes - 1 : post.likes + 1 }
-          : post
-      )
-    );
-
-    // Update selected post if open in modal
-    setSelectedPost((prev) =>
-      prev && String(prev.id) === postId
-        ? { ...prev, isLiked: !currentlyLiked, likes: currentlyLiked ? prev.likes - 1 : prev.likes + 1 }
-        : prev
-    );
-
-    // Update likedMap in TanStack Query cache
-    queryClient.setQueryData(
-      queryKeys.posts.profileLiked(username, sessionId),
-      (old: Map<string, boolean> | undefined) => {
-        if (!old) return new Map([[postId, !currentlyLiked]]);
-        const newMap = new Map(old);
-        newMap.set(postId, !currentlyLiked);
-        return newMap;
-      }
-    );
-
-    setIsLiking((prev) => new Set(prev).add(postId));
-
-    const result = await togglePostLike(postId, sessionId);
-
-    setIsLiking((prev) => {
-      const next = new Set(prev);
-      next.delete(postId);
-      return next;
-    });
-
-    if (!result.success) {
-      // Revert on failure
-      setPosts((prevPosts) =>
-        prevPosts.map((post) =>
-          post.id === postId
-            ? { ...post, likes: currentlyLiked ? post.likes + 1 : post.likes - 1 }
-            : post
-        )
-      );
-      setSelectedPost((prev) =>
-        prev && String(prev.id) === postId
-          ? { ...prev, isLiked: currentlyLiked, likes: currentlyLiked ? prev.likes + 1 : prev.likes - 1 }
-          : prev
-      );
-      queryClient.setQueryData(
-        queryKeys.posts.profileLiked(username, sessionId),
-        (old: Map<string, boolean> | undefined) => {
-          if (!old) return new Map([[postId, currentlyLiked]]);
-          const newMap = new Map(old);
-          newMap.set(postId, currentlyLiked);
-          return newMap;
-        }
-      );
-    } else {
-      queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
-    }
-  };
-
-  // Real-time subscription for like updates
-  const isLikingRef = useRef(isLiking);
-  isLikingRef.current = isLiking;
-
-  useEffect(() => {
-    const unsubscribe = subscribeToPostLikes((update) => {
-      if (isLikingRef.current.has(update.postId)) return;
-
-      setPosts((prevPosts) =>
-        prevPosts.map((post) =>
-          post.id === update.postId ? { ...post, likes: update.likes } : post
-        )
-      );
-      setSelectedPost((prev) =>
-        prev && String(prev.id) === update.postId
-          ? { ...prev, likes: update.likes }
-          : prev
-      );
-    });
-
-    return () => unsubscribe();
-  }, []);
+  // Real-time subscription for like count updates
+  usePostLikesSubscription<ProfilePost>({
+    setPosts,
+    setSelectedPost,
+    isLikingRef,
+  });
 
   // Posts with liked status
   const postsWithLikedStatus = useMemo(() => {

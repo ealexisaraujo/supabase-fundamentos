@@ -1,28 +1,9 @@
 import { supabase } from "./client";
 import { posts as mockPosts, type Post } from "../mocks/posts";
 import { getSessionLikes } from "./ratings";
+import { transformSupabasePost, type SupabasePostRaw } from "./transform-post";
 
 const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
-
-export async function getRankedPosts(): Promise<Post[]> {
-  if (USE_MOCKS) {
-    console.log("Using mock data for ranking");
-    return [...mockPosts].sort((a, b) => b.likes - a.likes);
-  }
-
-  const { data, error } = await supabase
-    .from("posts_new")
-    .select("id, image_url, caption, likes, user, user_id, created_at")
-    .gt("likes", 5)
-    .order("likes", { ascending: false });
-
-  if (error) {
-    console.error("Error fetching ranked from Supabase:", JSON.stringify(error, null, 2));
-    return [];
-  }
-
-  return data || [];
-}
 
 /**
  * Options for fetching posts with like status
@@ -67,7 +48,6 @@ export async function getPostsWithLikeStatus(
   const { minLikes, orderBy = 'created_at', ascending = false, page = 0, limit = 10 } = options;
 
   if (USE_MOCKS) {
-    console.log("Using mock data with session likes");
     let result = [...mockPosts];
 
     // Apply minLikes filter for mocks
@@ -128,17 +108,12 @@ export async function getPostsWithLikeStatus(
   const postIds = data.map((post) => post.id);
   const likedMap = await getSessionLikes(postIds, sessionId);
 
-  // Merge liked status into posts and extract comment count
+  // Transform and merge liked status into posts
   return data.map((post) => {
-    // Extract comment count - Supabase returns { comments: [{ count: N }] }
-    const commentsData = post.comments as { count: number }[] | undefined;
-    const comments_count = commentsData?.[0]?.count ?? 0;
-
+    const transformedPost = transformSupabasePost(post as SupabasePostRaw);
     return {
-      ...post,
+      ...transformedPost,
       isLiked: likedMap.get(post.id) || false,
-      comments_count,
-      comments: undefined, // Remove the nested comments array
     };
   });
 }

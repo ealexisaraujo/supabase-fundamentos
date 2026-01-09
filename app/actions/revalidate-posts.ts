@@ -49,8 +49,6 @@ export async function revalidatePostsCache(): Promise<{
   success: boolean;
   revalidatedTags: string[];
 }> {
-  console.log("[Server Action] Revalidating posts cache");
-
   try {
     // Layer 1: Invalidate Redis cache (distributed)
     await invalidateCacheByTag(cacheTags.POSTS);
@@ -66,13 +64,8 @@ export async function revalidatePostsCache(): Promise<{
     revalidateTag(PROFILE_CACHE_TAGS.PROFILES, CACHE_PROFILE);
 
     // Layer 3: Purge Router Cache for affected pages
-    // This is critical for client-side navigation to show fresh data
     revalidatePath("/");
     revalidatePath("/rank");
-
-    console.log(
-      `[Server Action] Cache revalidated for paths: /, /rank and tags: ${CACHE_TAGS.POSTS}, ${PROFILE_CACHE_TAGS.PROFILES} (Redis + Data Cache)`
-    );
 
     return {
       success: true,
@@ -95,12 +88,8 @@ export async function revalidatePostsCache(): Promise<{
  * @returns Promise<{ success: boolean }>
  */
 export async function revalidateHomeCache(): Promise<{ success: boolean }> {
-  console.log("[Server Action] Revalidating home posts cache");
-  
   try {
-    // Next.js 16 requires a cache profile as second argument
     revalidateTag(CACHE_TAGS.HOME_POSTS, CACHE_PROFILE);
-    console.log(`[Server Action] Home cache revalidated`);
     return { success: true };
   } catch (error) {
     console.error("[Server Action] Error revalidating home cache:", error);
@@ -110,18 +99,14 @@ export async function revalidateHomeCache(): Promise<{ success: boolean }> {
 
 /**
  * Revalidates only the ranked posts cache
- * 
+ *
  * Use this for operations that primarily affect rankings
- * 
+ *
  * @returns Promise<{ success: boolean }>
  */
 export async function revalidateRankedCache(): Promise<{ success: boolean }> {
-  console.log("[Server Action] Revalidating ranked posts cache");
-  
   try {
-    // Next.js 16 requires a cache profile as second argument
     revalidateTag(CACHE_TAGS.RANKED_POSTS, CACHE_PROFILE);
-    console.log(`[Server Action] Ranked cache revalidated`);
     return { success: true };
   } catch (error) {
     console.error("[Server Action] Error revalidating ranked cache:", error);

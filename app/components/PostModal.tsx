@@ -6,10 +6,7 @@ import { getTimeAgo } from "../utils/time";
 import type { Post } from "../mocks/posts";
 import { HeartIcon, CloseIcon } from "./icons";
 import CommentsSection from "./CommentsSection";
-
-// Base64 gray placeholder for loading images
-const BLUR_DATA_URL =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mFrYGb6DwAEsAGzK+3tCAAAAABJRU5ErkJggg==";
+import { BLUR_DATA_URL } from "../constants";
 
 interface PostModalProps {
   post: Post;

@@ -26,6 +26,7 @@ import {
 } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "../utils/client";
+import { getSessionId } from "../utils/session";
 
 interface AuthContextType {
   /** Current authenticated user, null if not logged in */
@@ -34,6 +35,8 @@ interface AuthContextType {
   session: Session | null;
   /** True while initial auth check is in progress */
   isLoading: boolean;
+  /** Anonymous session ID for tracking likes without auth */
+  sessionId: string;
   /** Sign out the current user */
   signOut: () => Promise<void>;
   /** Refresh the session (useful after profile updates) */
@@ -50,22 +53,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Initialize sessionId once - used for anonymous like tracking
+  const [sessionId] = useState<string>(() => getSessionId());
 
   // Initialize auth state and set up listener
   useEffect(() => {
-    console.log("[AuthProvider] Initializing auth state");
-
     // Get initial session
     const initializeAuth = async () => {
       try {
         const {
           data: { session: initialSession },
         } = await supabase.auth.getSession();
-
-        console.log(
-          "[AuthProvider] Initial session:",
-          initialSession ? "Found" : "None"
-        );
 
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
@@ -81,27 +79,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Subscribe to auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, newSession) => {
-      console.log("[AuthProvider] Auth state changed:", event);
-
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
       // Ensure loading is false after any auth event
-      // Using functional update to avoid stale closure
       setIsLoading((current) => (current ? false : current));
     });
 
     // Cleanup subscription on unmount
     return () => {
-      console.log("[AuthProvider] Cleaning up auth subscription");
       subscription.unsubscribe();
     };
   }, []); // Empty dependency array - only run once on mount
 
   // Sign out function
   const signOut = useCallback(async () => {
-    console.log("[AuthProvider] Signing out");
     try {
       await supabase.auth.signOut();
       // State will be updated by onAuthStateChange listener
@@ -113,7 +106,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Refresh session function
   const refreshSession = useCallback(async () => {
-    console.log("[AuthProvider] Refreshing session");
     try {
       const {
         data: { session: refreshedSession },
@@ -130,6 +122,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     session,
     isLoading,
+    sessionId,
     signOut,
     refreshSession,
   };

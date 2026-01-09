@@ -20,16 +20,15 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { getPostsWithLikeStatus } from "../utils/posts";
-import { getSessionId } from "../utils/session";
-import { togglePostLike, subscribeToPostLikes } from "../utils/ratings";
 import type { Post } from "../mocks/posts";
 import { PostCard } from "./PostCard";
 import { PostCardSkeleton } from "./Skeletons";
 import { ThemeToggle } from "./ThemeToggle";
 import Link from "next/link";
 import { useAuth, queryKeys } from "../providers";
+import { useLikeHandler, usePostLikesSubscription } from "../hooks";
 
 interface HomeFeedProps {
   /** Initial posts from server-side cached fetch */
@@ -38,18 +37,12 @@ interface HomeFeedProps {
 
 export function HomeFeed({ initialPosts }: HomeFeedProps) {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
-  // Auth state from centralized provider (no per-component fetch)
-  const { user, isLoading: isAuthLoading, signOut } = useAuth();
-
-  // Debug: Log initial posts received from server
-  console.log(`[HomeFeed] Received ${initialPosts.length} initial posts from server cache`);
+  // Auth state and sessionId from centralized provider
+  const { user, isLoading: isAuthLoading, signOut, sessionId } = useAuth();
 
   // Initialize posts with server-provided data
   const [posts, setPosts] = useState<Post[]>(initialPosts);
-  const [sessionId, setSessionId] = useState<string>(() => getSessionId());
-  const [isLiking, setIsLiking] = useState<Set<string>>(new Set());
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -63,19 +56,15 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
     queryFn: async () => {
       if (!sessionId || initialPosts.length === 0) return new Map<string, boolean>();
 
-      console.log("[HomeFeed] Fetching liked status (cached query)");
       const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, {
         page: 0,
         limit: initialPosts.length,
       });
 
       // Create a map of post ID to liked status
-      const likedMap = new Map<string, boolean>(
+      return new Map<string, boolean>(
         postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
       );
-
-      console.log("[HomeFeed] Liked status fetched for", likedMap.size, "posts");
-      return likedMap;
     },
     enabled: !!sessionId && initialPosts.length > 0,
     staleTime: 60 * 1000, // Consider fresh for 60 seconds
@@ -97,104 +86,19 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   // Track initialization state
   const isInitializing = isLikedStatusLoading && posts.length === 0;
 
-  /**
-   * Handles like/unlike toggle for a post
-   * Uses optimistic updates for immediate UI feedback
-   *
-   * IMPORTANT: We must read the current liked status from likedMap (TanStack Query cache),
-   * NOT from the posts state. The posts state may have stale isLiked values from the server,
-   * while likedMap always has the accurate client-side liked status.
-   *
-   * This was the root cause of the "flash bug" where the counter would briefly show
-   * the wrong value (going in the opposite direction).
-   */
-  const handleLike = async (postId: number | string) => {
-    const postIdStr = String(postId);
+  // Centralized like handling with optimistic updates
+  const { handleLike, isLikingRef } = useLikeHandler({
+    sessionId,
+    queryKey: queryKeys.posts.liked(sessionId),
+    setPosts,
+    likedMap,
+  });
 
-    // Prevent double-clicking while processing
-    if (isLiking.has(postIdStr)) {
-      console.log(`[HomeFeed] Like already in progress for post ${postIdStr}`);
-      return;
-    }
-
-    // Get current liked status from likedMap (source of truth), NOT from posts state
-    // This is critical to prevent the flash bug where optimistic update goes wrong direction
-    const currentlyLiked = likedMap?.get(postIdStr) ?? false;
-
-    console.log(`[HomeFeed] Optimistic update: post ${postIdStr}, currentlyLiked=${currentlyLiked}, will become ${!currentlyLiked}`);
-
-    // Optimistic update for immediate UI feedback
-    // Use currentlyLiked from likedMap, NOT post.isLiked from state
-    setPosts((prevPosts) =>
-      prevPosts.map((post) =>
-        post.id === postId
-          ? {
-              ...post,
-              isLiked: !currentlyLiked,
-              likes: currentlyLiked ? post.likes - 1 : post.likes + 1,
-            }
-          : post
-      )
-    );
-
-    // Also update likedMap in TanStack Query cache for consistency
-    queryClient.setQueryData(
-      queryKeys.posts.liked(sessionId),
-      (old: Map<string, boolean> | undefined) => {
-        if (!old) return new Map([[postIdStr, !currentlyLiked]]);
-        const newMap = new Map(old);
-        newMap.set(postIdStr, !currentlyLiked);
-        return newMap;
-      }
-    );
-
-    // Mark as processing
-    setIsLiking((prev) => new Set(prev).add(postIdStr));
-
-    // Persist to database
-    const result = await togglePostLike(postIdStr, sessionId);
-
-    // Remove from processing
-    setIsLiking((prev) => {
-      const next = new Set(prev);
-      next.delete(postIdStr);
-      return next;
-    });
-
-    // If failed, revert the optimistic update
-    if (!result.success) {
-      console.error("[HomeFeed] Failed to toggle like:", result.error);
-
-      // Revert posts state
-      setPosts((prevPosts) =>
-        prevPosts.map((post) =>
-          post.id === postId
-            ? {
-                ...post,
-                isLiked: currentlyLiked, // Revert to original value
-                likes: currentlyLiked ? post.likes + 1 : post.likes - 1, // Undo the change
-              }
-            : post
-        )
-      );
-
-      // Revert likedMap cache
-      queryClient.setQueryData(
-        queryKeys.posts.liked(sessionId),
-        (old: Map<string, boolean> | undefined) => {
-          if (!old) return new Map([[postIdStr, currentlyLiked]]);
-          const newMap = new Map(old);
-          newMap.set(postIdStr, currentlyLiked);
-          return newMap;
-        }
-      );
-    } else {
-      // Invalidate TanStack Query cache to ensure fresh data on navigation
-      // This invalidates ALL posts queries so rank/profile pages get fresh isLiked status
-      console.log("[HomeFeed] Like successful, invalidating TanStack Query cache");
-      queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
-    }
-  };
+  // Real-time subscription for like count updates
+  usePostLikesSubscription({
+    setPosts,
+    isLikingRef,
+  });
 
   /**
    * Fetches additional posts for infinite scroll
@@ -203,7 +107,6 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   const fetchMorePosts = useCallback(async (pageNum: number) => {
     if (!sessionId) return;
 
-    console.log(`[HomeFeed] Fetching more posts - page: ${pageNum}`);
     setLoadingMore(true);
 
     try {
@@ -214,15 +117,12 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
 
       if (data.length < POSTS_PER_PAGE) {
         setHasMore(false);
-        console.log("[HomeFeed] No more posts available");
       }
 
       // Deduplicate posts to prevent "duplicate key" React errors
-      // This can happen due to pagination overlap or timing issues
       setPosts((prev) => {
         const existingIds = new Set(prev.map(p => String(p.id)));
         const newPosts = data.filter(p => !existingIds.has(String(p.id)));
-        console.log(`[HomeFeed] Adding ${newPosts.length} new posts (${data.length - newPosts.length} duplicates filtered)`);
         return [...prev, ...newPosts];
       });
       setPage(pageNum);
@@ -246,7 +146,6 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loadingMore && sessionId) {
-          console.log("[HomeFeed] Intersection triggered - loading more posts");
           fetchMorePosts(page + 1);
         }
       },
@@ -263,38 +162,6 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
       }
     };
   }, [hasMore, loadingMore, page, fetchMorePosts, sessionId]);
-
-  // Subscribe to real-time updates for like counts
-  // Uses isLiking ref to prevent race conditions with optimistic updates
-  const isLikingRef = useRef(isLiking);
-  isLikingRef.current = isLiking;
-
-  useEffect(() => {
-    console.log("[HomeFeed] Setting up real-time subscription for likes");
-
-    const unsubscribe = subscribeToPostLikes((update) => {
-      // Skip real-time updates for posts that are currently being liked/unliked
-      // This prevents the "flash" bug where the counter briefly shows wrong values
-      if (isLikingRef.current.has(update.postId)) {
-        console.log(`[HomeFeed] Skipping real-time update for post ${update.postId} (optimistic update in progress)`);
-        return;
-      }
-
-      console.log(`[HomeFeed] Real-time like update received - post: ${update.postId}, likes: ${update.likes}`);
-      setPosts((prevPosts) =>
-        prevPosts.map((post) =>
-          post.id === update.postId
-            ? { ...post, likes: update.likes }
-            : post
-        )
-      );
-    });
-
-    return () => {
-      console.log("[HomeFeed] Cleaning up real-time subscription");
-      unsubscribe();
-    };
-  }, []);
 
   return (
     <div className="min-h-screen bg-background">

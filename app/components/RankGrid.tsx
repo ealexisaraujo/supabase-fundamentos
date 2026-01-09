@@ -17,22 +17,18 @@
  */
 
 import Image from "next/image";
-import { useState, useEffect, useMemo, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getPostsWithLikeStatus } from "../utils/posts";
 import { RANK_MIN_LIKES, RANK_PAGE_LIMIT } from "../utils/cached-posts";
-import { subscribeToPostLikes, togglePostLike } from "../utils/ratings";
-import { getSessionId } from "../utils/session";
 import type { Post } from "../mocks/posts";
 import { PostModal } from "./PostModal";
 import { RankItemSkeleton } from "./Skeletons";
 import { HeartIcon } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
-import { queryKeys } from "../providers";
-
-// Base64 gray placeholder for loading images
-const BLUR_DATA_URL =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mFrYGb6DwAEsAGzK+3tCAAAAABJRU5ErkJggg==";
+import { queryKeys, useAuth } from "../providers";
+import { useLikeHandler, usePostLikesSubscription } from "../hooks";
+import { BLUR_DATA_URL } from "../constants";
 
 interface RankGridProps {
   /** Initial ranked posts from server-side cached fetch */
@@ -40,16 +36,12 @@ interface RankGridProps {
 }
 
 export function RankGrid({ initialPosts }: RankGridProps) {
-  const queryClient = useQueryClient();
-
-  // Debug: Log initial posts received from server
-  console.log(`[RankGrid] Received ${initialPosts.length} initial ranked posts from server cache`);
+  // Get sessionId from centralized provider
+  const { sessionId } = useAuth();
 
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   // Initialize posts with server-provided data
   const [posts, setPosts] = useState<Post[]>(initialPosts);
-  const [sessionId, setSessionId] = useState<string>(() => getSessionId());
-  const [isLiking, setIsLiking] = useState<Set<string>>(new Set());
 
   // Fetch liked status with TanStack Query caching
   // Returns a Map of postId -> isLiked for efficient lookups
@@ -58,21 +50,17 @@ export function RankGrid({ initialPosts }: RankGridProps) {
     queryFn: async () => {
       if (!sessionId || initialPosts.length === 0) return new Map<string, boolean>();
 
-      console.log("[RankGrid] Fetching liked status (cached query)");
       const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, {
         minLikes: RANK_MIN_LIKES,
         orderBy: "likes",
         ascending: false,
-        limit: RANK_PAGE_LIMIT, // Use same limit as server-side fetch
+        limit: RANK_PAGE_LIMIT,
       });
 
       // Create a map of post ID to liked status
-      const likedMap = new Map<string, boolean>(
+      return new Map<string, boolean>(
         postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
       );
-
-      console.log("[RankGrid] Liked status fetched for", likedMap.size, "posts");
-      return likedMap;
     },
     enabled: !!sessionId && initialPosts.length > 0,
     staleTime: 60 * 1000, // Consider fresh for 60 seconds
@@ -94,161 +82,21 @@ export function RankGrid({ initialPosts }: RankGridProps) {
   // Track initialization state
   const isInitializing = isLikedStatusLoading && posts.length === 0;
 
-  /**
-   * Handles like/unlike toggle for a post
-   * Uses optimistic updates for immediate UI feedback
-   *
-   * IMPORTANT: We must read the current liked status from likedMap (TanStack Query cache),
-   * NOT from the posts state. The posts state may have stale isLiked values from the server,
-   * while likedMap always has the accurate client-side liked status.
-   *
-   * This was the root cause of the "flash bug" where the counter would briefly show
-   * the wrong value (going in the opposite direction).
-   */
-  const handleLike = async (postId: string) => {
-    // Prevent double-clicking while processing
-    if (isLiking.has(postId)) {
-      console.log(`[RankGrid] Like already in progress for post ${postId}`);
-      return;
-    }
+  // Centralized like handling with optimistic updates
+  const { handleLike, isLikingRef } = useLikeHandler({
+    sessionId,
+    queryKey: queryKeys.posts.ranked(sessionId),
+    setPosts,
+    setSelectedPost,
+    likedMap,
+  });
 
-    // Get current liked status from likedMap (source of truth), NOT from posts state
-    // This is critical to prevent the flash bug where optimistic update goes wrong direction
-    const currentlyLiked = likedMap?.get(postId) ?? false;
-
-    console.log(`[RankGrid] Optimistic update: post ${postId}, currentlyLiked=${currentlyLiked}, will become ${!currentlyLiked}`);
-
-    // Optimistic update for immediate UI feedback
-    // Use currentlyLiked from likedMap, NOT post.isLiked from state
-    setPosts((prevPosts) =>
-      prevPosts.map((post) =>
-        post.id === postId
-          ? {
-              ...post,
-              isLiked: !currentlyLiked,
-              likes: currentlyLiked ? post.likes - 1 : post.likes + 1,
-            }
-          : post
-      )
-    );
-    // Also update selected post
-    setSelectedPost((prev) =>
-      prev && prev.id === postId
-        ? {
-            ...prev,
-            isLiked: !currentlyLiked,
-            likes: currentlyLiked ? prev.likes - 1 : prev.likes + 1,
-          }
-        : prev
-    );
-
-    // Also update likedMap in TanStack Query cache for consistency
-    queryClient.setQueryData(
-      queryKeys.posts.ranked(sessionId),
-      (old: Map<string, boolean> | undefined) => {
-        if (!old) return new Map([[postId, !currentlyLiked]]);
-        const newMap = new Map(old);
-        newMap.set(postId, !currentlyLiked);
-        return newMap;
-      }
-    );
-
-    // Mark as processing
-    setIsLiking((prev) => new Set(prev).add(postId));
-
-    // Persist to database
-    const result = await togglePostLike(postId, sessionId);
-
-    // Remove from processing
-    setIsLiking((prev) => {
-      const next = new Set(prev);
-      next.delete(postId);
-      return next;
-    });
-
-    // If failed, revert the optimistic update
-    if (!result.success) {
-      console.error("[RankGrid] Failed to toggle like:", result.error);
-
-      // Revert posts state
-      setPosts((prevPosts) =>
-        prevPosts.map((post) =>
-          post.id === postId
-            ? {
-                ...post,
-                isLiked: currentlyLiked, // Revert to original value
-                likes: currentlyLiked ? post.likes + 1 : post.likes - 1, // Undo the change
-              }
-            : post
-        )
-      );
-      setSelectedPost((prev) =>
-        prev && prev.id === postId
-          ? {
-              ...prev,
-              isLiked: currentlyLiked, // Revert to original value
-              likes: currentlyLiked ? prev.likes + 1 : prev.likes - 1, // Undo the change
-            }
-          : prev
-      );
-
-      // Revert likedMap cache
-      queryClient.setQueryData(
-        queryKeys.posts.ranked(sessionId),
-        (old: Map<string, boolean> | undefined) => {
-          if (!old) return new Map([[postId, currentlyLiked]]);
-          const newMap = new Map(old);
-          newMap.set(postId, currentlyLiked);
-          return newMap;
-        }
-      );
-    } else {
-      // Invalidate TanStack Query cache to ensure fresh data on navigation
-      // This invalidates ALL posts queries so home/profile pages get fresh isLiked status
-      console.log("[RankGrid] Like successful, invalidating TanStack Query cache");
-      queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
-    }
-  };
-
-  // Note: Session initialization and liked status fetching is now handled by:
-  // - sessionId: initialized with getSessionId() in useState
-  // - liked status: fetched via useQuery with caching
-
-  // Subscribe to real-time updates for like counts
-  // Uses isLiking ref to prevent race conditions with optimistic updates
-  const isLikingRef = useRef(isLiking);
-  isLikingRef.current = isLiking;
-
-  useEffect(() => {
-    console.log("[RankGrid] Setting up real-time subscription for likes");
-
-    const unsubscribe = subscribeToPostLikes((update) => {
-      // Skip real-time updates for posts that are currently being liked/unliked
-      // This prevents the "flash" bug where the counter briefly shows wrong values
-      if (isLikingRef.current.has(update.postId)) {
-        console.log(`[RankGrid] Skipping real-time update for post ${update.postId} (optimistic update in progress)`);
-        return;
-      }
-
-      console.log(`[RankGrid] Real-time like update received - post: ${update.postId}, likes: ${update.likes}`);
-      setPosts((prevPosts) =>
-        prevPosts.map((post) =>
-          post.id === update.postId ? { ...post, likes: update.likes } : post
-        )
-      );
-      // Also update selected post if it's the one that changed
-      setSelectedPost((prev) =>
-        prev && prev.id === update.postId
-          ? { ...prev, likes: update.likes }
-          : prev
-      );
-    });
-
-    return () => {
-      console.log("[RankGrid] Cleaning up real-time subscription");
-      unsubscribe();
-    };
-  }, []);
+  // Real-time subscription for like count updates
+  usePostLikesSubscription({
+    setPosts,
+    setSelectedPost,
+    isLikingRef,
+  });
 
   // Sort posts by likes (descending) for display, with liked status from cache
   const sortedPosts = useMemo(() => {

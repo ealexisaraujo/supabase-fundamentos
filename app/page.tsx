@@ -20,15 +20,9 @@
 import { getCachedHomePosts } from "./utils/cached-posts";
 import { HomeFeed } from "./components/HomeFeed";
 
-// Debug: Log when this server component renders
-console.log("[Home Page] Server Component rendering - fetching cached posts");
-
 export default async function Home() {
   // Fetch initial posts from cache (or Supabase if cache miss)
-  // This reduces database hits significantly
   const initialPosts = await getCachedHomePosts(0, 10);
-
-  console.log(`[Home Page] Passing ${initialPosts.length} cached posts to HomeFeed`);
 
   // Pass cached data to client component for interactive features
   return <HomeFeed initialPosts={initialPosts} />;

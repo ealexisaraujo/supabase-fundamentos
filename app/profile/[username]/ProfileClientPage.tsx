@@ -19,17 +19,36 @@ import { UserIcon, BackIcon, CameraIcon, GridIcon } from "../../components/icons
 import { Button } from "../../components/Button";
 import { shouldSkipImageOptimization } from "../../utils/image";
 import { useAuth } from "../../providers";
-import type { Profile as ProfileType, ProfilePost } from "../../utils/cached-profiles";
+import type { Profile } from "../../utils/cached-profiles";
 
-interface Profile {
-  id: string;
-  username: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  website: string | null;
-  posts?: ProfilePost[];
-  post_count?: number;
+interface ProfileEditViewProps {
+  profile: Profile;
+  onBack: () => void;
+  onSuccess: (updated: Profile) => void;
+}
+
+function ProfileEditView({ profile, onBack, onSuccess }: ProfileEditViewProps) {
+  return (
+    <div className="min-h-screen bg-background pb-20">
+      <header className="sticky top-0 z-40 bg-card-bg border-b border-border">
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+          <Button
+            variant="accent"
+            size="sm"
+            onClick={onBack}
+            leftIcon={<BackIcon className="w-4 h-4" />}
+          >
+            Volver
+          </Button>
+          <h1 className="text-xl font-bold">Editar Perfil</h1>
+          <div className="w-20" />
+        </div>
+      </header>
+      <main className="max-w-lg mx-auto px-4 py-8">
+        <ProfileEditForm initialProfile={profile} onSuccess={onSuccess} />
+      </main>
+    </div>
+  );
 }
 
 export default function ProfileClientPage({ initialProfile }: { initialProfile: Profile }) {
@@ -44,31 +63,14 @@ export default function ProfileClientPage({ initialProfile }: { initialProfile: 
 
   if (isEditing) {
     return (
-      <div className="min-h-screen bg-background pb-20">
-        <header className="sticky top-0 z-40 bg-card-bg border-b border-border">
-          <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-            <Button
-              variant="accent"
-              size="sm"
-              onClick={() => setIsEditing(false)}
-              leftIcon={<BackIcon className="w-4 h-4" />}
-            >
-              Volver
-            </Button>
-            <h1 className="text-xl font-bold">Editar Perfil</h1>
-            <div className="w-20" />
-          </div>
-        </header>
-        <main className="max-w-lg mx-auto px-4 py-8">
-          <ProfileEditForm
-            initialProfile={profile}
-            onSuccess={(updated) => {
-              setProfile(updated);
-              setIsEditing(false);
-            }}
-          />
-        </main>
-      </div>
+      <ProfileEditView
+        profile={profile}
+        onBack={() => setIsEditing(false)}
+        onSuccess={(updated) => {
+          setProfile(updated);
+          setIsEditing(false);
+        }}
+      />
     );
   }
 

@@ -46,10 +46,6 @@ export async function revalidateProfileCache(username: string): Promise<{
   const normalizedUsername = username.toLowerCase();
   const profileTag = PROFILE_CACHE_TAGS.profileTag(normalizedUsername);
 
-  console.log(
-    `[Server Action] Revalidating profile cache for: ${normalizedUsername}`
-  );
-
   try {
     // Layer 1: Invalidate Redis cache (both profile and profile-with-posts)
     await invalidateCache(`profile:${normalizedUsername}*`);
@@ -61,12 +57,7 @@ export async function revalidateProfileCache(username: string): Promise<{
     revalidateTag(PROFILE_CACHE_TAGS.PROFILES, CACHE_PROFILE);
 
     // Layer 3: Purge Router Cache for the profile page
-    // This ensures client-side navigation shows fresh data
     revalidatePath(`/profile/${normalizedUsername}`);
-
-    console.log(
-      `[Server Action] Profile cache revalidated for: ${normalizedUsername}`
-    );
 
     return {
       success: true,
@@ -98,20 +89,12 @@ export async function revalidateUsernameChange(
   oldUsername: string,
   newUsername: string
 ): Promise<{ success: boolean }> {
-  console.log(
-    `[Server Action] Revalidating username change: ${oldUsername} → ${newUsername}`
-  );
-
   try {
     // Invalidate the old username cache
     await revalidateProfileCache(oldUsername);
 
     // Invalidate the new username cache
     await revalidateProfileCache(newUsername);
-
-    console.log(
-      `[Server Action] Username change cache revalidated: ${oldUsername} → ${newUsername}`
-    );
 
     return { success: true };
   } catch (error) {
@@ -132,16 +115,12 @@ export async function revalidateUsernameChange(
  * @returns Promise<{ success: boolean }>
  */
 export async function revalidateAllProfiles(): Promise<{ success: boolean }> {
-  console.log("[Server Action] Revalidating all profiles cache");
-
   try {
     // Revalidate the global profiles tag
     revalidateTag(PROFILE_CACHE_TAGS.PROFILES, CACHE_PROFILE);
 
     // Purge Router Cache for the profile index
     revalidatePath("/profile");
-
-    console.log("[Server Action] All profiles cache revalidated");
 
     return { success: true };
   } catch (error) {

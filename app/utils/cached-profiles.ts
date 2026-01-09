@@ -86,8 +86,6 @@ function getSupabaseClient() {
 async function fetchProfileByUsername(
   username: string
 ): Promise<Profile | null> {
-  console.log(`[CachedProfiles] Fetching profile for username: ${username}`);
-
   const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
@@ -99,14 +97,12 @@ async function fetchProfileByUsername(
   if (error) {
     if (error.code === "PGRST116") {
       // No rows returned - profile not found
-      console.log(`[CachedProfiles] Profile not found for username: ${username}`);
       return null;
     }
     console.error("[CachedProfiles] Error fetching profile:", error);
     return null;
   }
 
-  console.log(`[CachedProfiles] Fetched profile for ${username} from Supabase`);
   return data;
 }
 
@@ -126,8 +122,6 @@ async function fetchProfileByUsername(
 export async function getCachedProfile(
   username: string
 ): Promise<Profile | null> {
-  console.log(`[CachedProfiles] getCachedProfile called for: ${username}`);
-
   // Normalize username for consistent cache keys
   const normalizedUsername = username.toLowerCase();
   const cacheKey = cacheKeys.profile(normalizedUsername);
@@ -135,12 +129,10 @@ export async function getCachedProfile(
   // Layer 1: Try Redis first (fastest)
   const redisData = await getFromCache<Profile>(cacheKey);
   if (redisData) {
-    console.log(`[CachedProfiles] Redis HIT for ${cacheKey}`);
     return redisData;
   }
 
   // Layer 2: Fall back to unstable_cache + Supabase
-  console.log(`[CachedProfiles] Redis MISS for ${cacheKey}, fetching from Supabase`);
   const cachedFetch = unstable_cache(
     async () => {
       const profile = await fetchProfileByUsername(normalizedUsername);
@@ -169,8 +161,6 @@ export async function getCachedProfile(
 async function fetchProfileWithPosts(
   username: string
 ): Promise<Profile | null> {
-  console.log(`[CachedProfiles] Fetching profile with posts for: ${username}`);
-
   const supabase = getSupabaseClient();
 
   // First fetch the profile
@@ -182,7 +172,6 @@ async function fetchProfileWithPosts(
 
   if (profileError) {
     if (profileError.code === "PGRST116") {
-      console.log(`[CachedProfiles] Profile not found for username: ${username}`);
       return null;
     }
     console.error("[CachedProfiles] Error fetching profile:", profileError);
@@ -200,8 +189,6 @@ async function fetchProfileWithPosts(
   if (postsError) {
     console.error("[CachedProfiles] Error fetching user posts:", postsError);
   }
-
-  console.log(`[CachedProfiles] Fetched profile with ${posts?.length || 0} posts for ${username}`);
 
   return {
     ...profile,
@@ -221,20 +208,16 @@ async function fetchProfileWithPosts(
 export async function getCachedProfileWithPosts(
   username: string
 ): Promise<Profile | null> {
-  console.log(`[CachedProfiles] getCachedProfileWithPosts called for: ${username}`);
-
   const normalizedUsername = username.toLowerCase();
   const cacheKey = `${cacheKeys.profile(normalizedUsername)}:with-posts`;
 
   // Layer 1: Try Redis first
   const redisData = await getFromCache<Profile>(cacheKey);
   if (redisData) {
-    console.log(`[CachedProfiles] Redis HIT for ${cacheKey}`);
     return redisData;
   }
 
   // Layer 2: Fall back to unstable_cache + Supabase
-  console.log(`[CachedProfiles] Redis MISS for ${cacheKey}, fetching from Supabase`);
   const cachedFetch = unstable_cache(
     async () => {
       const profile = await fetchProfileWithPosts(normalizedUsername);
