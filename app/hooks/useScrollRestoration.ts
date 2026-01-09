@@ -46,48 +46,45 @@ export function useScrollRestoration({ key }: UseScrollRestorationOptions) {
     const targetScroll = targetScrollRef.current;
     if (targetScroll === null || targetScroll <= 0) return;
 
-    // Check if we've already reached the target
-    const checkAndRestore = () => {
-      const currentScroll = window.scrollY;
+    let attempts = 0;
+    const maxAttempts = 20; // Max 2 seconds (20 * 100ms)
+
+    const tryRestore = () => {
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
 
-      // If we're at or near the target, we're done
-      if (currentScroll >= targetScroll - 10) {
-        targetScrollRef.current = null;
-        return true;
-      }
-
-      // If document is now tall enough, restore scroll
+      // If document is tall enough, restore to exact position
       if (maxScroll >= targetScroll) {
         window.scrollTo({ top: targetScroll, behavior: "instant" });
         targetScrollRef.current = null;
         return true;
       }
 
-      return false;
+      // If we've reached the target (or close enough), we're done
+      if (window.scrollY >= targetScroll - 10) {
+        targetScrollRef.current = null;
+        return true;
+      }
+
+      // Scroll to bottom to trigger infinite scroll loading
+      // This makes the IntersectionObserver trigger and load more content
+      window.scrollTo({ top: maxScroll, behavior: "instant" });
+
+      attempts++;
+      return attempts >= maxAttempts;
     };
 
-    // Initial check
-    if (checkAndRestore()) return;
+    // Initial attempt
+    if (tryRestore()) return;
 
-    // Use ResizeObserver to detect when content loads and document grows
-    const resizeObserver = new ResizeObserver(() => {
-      if (checkAndRestore()) {
-        resizeObserver.disconnect();
+    // Poll every 100ms until content loads or max attempts reached
+    const interval = setInterval(() => {
+      if (tryRestore()) {
+        clearInterval(interval);
       }
-    });
-
-    resizeObserver.observe(document.body);
-
-    // Also use a timeout as fallback (max 2 seconds of retry)
-    const timeout = setTimeout(() => {
-      resizeObserver.disconnect();
-      targetScrollRef.current = null;
-    }, 2000);
+    }, 100);
 
     return () => {
-      resizeObserver.disconnect();
-      clearTimeout(timeout);
+      clearInterval(interval);
     };
   }, []);
 
