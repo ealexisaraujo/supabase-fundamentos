@@ -90,6 +90,12 @@ export function useScrollRestoration(options: UseScrollRestorationOptions = {}) 
   }, [storageKey, log]);
 
   useEffect(() => {
+    // Disable browser's automatic scroll restoration
+    // This allows our custom restoration to work
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+
     // Restore scroll position on mount
     restoreScrollPosition();
 

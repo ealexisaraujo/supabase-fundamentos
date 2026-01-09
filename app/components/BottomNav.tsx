@@ -50,6 +50,7 @@ export default function BottomNav() {
       <div className="max-w-lg mx-auto flex items-center justify-around py-2">
         <Link
           href="/"
+          scroll={false}
           className={`flex flex-col items-center gap-1 px-4 py-2 transition-colors ${
             pathname === "/" ? "text-primary" : "text-foreground/60 hover:text-foreground"
           }`}
@@ -60,6 +61,7 @@ export default function BottomNav() {
 
         <Link
           href="/rank"
+          scroll={false}
           className={`flex flex-col items-center gap-1 px-4 py-2 transition-colors ${
             pathname === "/rank" ? "text-primary" : "text-foreground/60 hover:text-foreground"
           }`}
