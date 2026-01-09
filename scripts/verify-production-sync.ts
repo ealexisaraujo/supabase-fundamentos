@@ -52,7 +52,7 @@ async function main() {
   console.log("🔗 Testing connections...\n");
 
   // Test Supabase
-  const { data: pingData, error: pingError } = await supabase
+  const { error: pingError } = await supabase
     .from("posts_new")
     .select("id")
     .limit(1);

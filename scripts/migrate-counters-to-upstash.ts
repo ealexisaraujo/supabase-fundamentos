@@ -139,7 +139,7 @@ async function main() {
 
     // Add all session IDs
     if (sessionIds.length > 0) {
-      await redis.sadd(key, ...sessionIds);
+      await redis.sadd(key, sessionIds);
     }
 
     setCount++;
