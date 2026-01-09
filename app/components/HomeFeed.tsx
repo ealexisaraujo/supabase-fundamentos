@@ -39,14 +39,15 @@ interface HomeFeedProps {
 export function HomeFeed({ initialPosts }: HomeFeedProps) {
   const router = useRouter();
 
+  // Initialize posts with server-provided data
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+
   // Preserve scroll position across navigation
-  useScrollRestoration({ key: "home-feed" });
+  // Pass posts.length so restoration retries when infinite scroll loads more content
+  useScrollRestoration({ key: "home-feed", dataLength: posts.length });
 
   // Auth state and sessionId from centralized provider
   const { user, isLoading: isAuthLoading, signOut, sessionId } = useAuth();
-
-  // Initialize posts with server-provided data
-  const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);

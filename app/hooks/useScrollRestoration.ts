@@ -3,8 +3,13 @@
 /**
  * useScrollRestoration - Preserves scroll position across navigation
  *
- * Handles infinite scroll scenarios by retrying restoration when content loads.
- * Uses useLayoutEffect for initial restoration to minimize visual jank.
+ * A scalable approach that:
+ * - Watches for content changes via `dataLength` prop
+ * - Retries restoration when new content loads (infinite scroll friendly)
+ * - Uses useLayoutEffect for initial attempt to minimize visual jank
+ * - Debounces scroll saves to avoid capturing navigation resets
+ *
+ * @see https://dev.to/hijazi313/nextjs-15-scroll-behavior-a-comprehensive-guide-387j
  */
 
 import { useLayoutEffect, useEffect, useRef } from "react";
@@ -12,90 +17,62 @@ import { useLayoutEffect, useEffect, useRef } from "react";
 export interface UseScrollRestorationOptions {
   /** Unique key for storing scroll position */
   key: string;
+  /** Length of loaded data - restoration retries when this changes */
+  dataLength?: number;
 }
 
-export function useScrollRestoration({ key }: UseScrollRestorationOptions) {
+export function useScrollRestoration({ key, dataLength = 0 }: UseScrollRestorationOptions) {
   const storageKey = `scroll:${key}`;
-  const isRestoredRef = useRef(false);
   const targetScrollRef = useRef<number | null>(null);
+  const isInitializedRef = useRef(false);
 
-  // Use useLayoutEffect for initial scroll restoration - runs before browser paint
+  // Initial restoration attempt - runs before paint
   useLayoutEffect(() => {
-    // Disable browser's automatic scroll restoration
     if ("scrollRestoration" in history) {
       history.scrollRestoration = "manual";
     }
 
-    // Get saved scroll position
-    if (!isRestoredRef.current) {
+    if (!isInitializedRef.current) {
       const saved = sessionStorage.getItem(storageKey);
       if (saved) {
         const scrollY = parseInt(saved, 10);
         if (!isNaN(scrollY) && scrollY > 0) {
           targetScrollRef.current = scrollY;
-          // Try immediate restoration
+          // Immediate attempt
           window.scrollTo({ top: scrollY, behavior: "instant" });
         }
       }
-      isRestoredRef.current = true;
+      isInitializedRef.current = true;
     }
   }, [storageKey]);
 
-  // Handle infinite scroll: retry restoration when document height grows
+  // Retry restoration when content loads (dataLength changes)
+  // Also trigger infinite scroll if document is too short
   useEffect(() => {
-    const targetScroll = targetScrollRef.current;
-    if (targetScroll === null || targetScroll <= 0) return;
+    const target = targetScrollRef.current;
+    if (target === null || target <= 0) return;
 
-    let attempts = 0;
-    const maxAttempts = 20; // Max 2 seconds (20 * 100ms)
-
-    const tryRestore = () => {
+    // Use microtask to let DOM update after data change
+    const timeoutId = setTimeout(() => {
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
 
       // If document is tall enough, restore to exact position
-      if (maxScroll >= targetScroll) {
-        window.scrollTo({ top: targetScroll, behavior: "instant" });
+      if (maxScroll >= target) {
+        window.scrollTo({ top: target, behavior: "instant" });
         targetScrollRef.current = null;
-        return true;
+        return;
       }
 
-      // If we've reached the target (or close enough), we're done
-      if (window.scrollY >= targetScroll - 10) {
-        targetScrollRef.current = null;
-        return true;
-      }
-
-      // Scroll to bottom to trigger infinite scroll loading
-      // This makes the IntersectionObserver trigger and load more content
+      // Otherwise, scroll to bottom to trigger infinite scroll loading
+      // This causes IntersectionObserver to fire and load more content
       window.scrollTo({ top: maxScroll, behavior: "instant" });
+    }, 0);
 
-      attempts++;
-      return attempts >= maxAttempts;
-    };
+    return () => clearTimeout(timeoutId);
+  }, [dataLength]);
 
-    // Initial attempt
-    if (tryRestore()) return;
-
-    // Poll every 100ms until content loads or max attempts reached
-    const interval = setInterval(() => {
-      if (tryRestore()) {
-        clearInterval(interval);
-      }
-    }, 100);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
-
-  // Use regular useEffect for scroll saving (doesn't need to block paint)
+  // Debounced scroll position saving
   useEffect(() => {
-    // Save scroll position with debounce to avoid capturing navigation resets.
-    // When user clicks a navigation link, Next.js resets scroll position which
-    // fires a scroll event. Using a 150ms debounce ensures that:
-    // 1. User scrolls → debounce timer starts
-    // 2. If navigation happens within 150ms, component unmounts and timer is cleared
-    // 3. The rapid scroll reset during navigation never gets saved
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const handleScroll = () => {

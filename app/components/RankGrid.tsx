@@ -35,15 +35,15 @@ interface RankGridProps {
 }
 
 export function RankGrid({ initialPosts }: RankGridProps) {
-  // Preserve scroll position across navigation
-  useScrollRestoration({ key: "rank-grid" });
-
-  // Get sessionId from centralized provider
-  const { sessionId } = useAuth();
-
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   // Initialize posts with server-provided data
   const [posts, setPosts] = useState<Post[]>(initialPosts);
+
+  // Preserve scroll position across navigation
+  useScrollRestoration({ key: "rank-grid", dataLength: posts.length });
+
+  // Get sessionId from centralized provider
+  const { sessionId } = useAuth();
 
   // Fetch counts and liked status from Redis with TanStack Query caching
   // Redis is the source of truth for counters, ensuring consistency across views
