@@ -19,6 +19,7 @@ import {
   toggleLike,
   type LikeResult,
 } from "../utils/redis/counters";
+import { revalidatePostsCache } from "./revalidate-posts";
 
 /**
  * Serialized result format that survives JSON serialization
@@ -63,10 +64,23 @@ export async function fetchCountsFromRedisAction(
 /**
  * Toggle like for a post
  * Called from client components via server action
+ *
+ * After a successful like/unlike, invalidates the posts cache
+ * to ensure rank page and home page show fresh data.
  */
 export async function toggleLikeAction(
   postId: string,
   sessionId: string
 ): Promise<LikeResult> {
-  return toggleLike(postId, sessionId);
+  const result = await toggleLike(postId, sessionId);
+
+  // Invalidate cache after successful like/unlike
+  // This ensures rank page and home page fetch fresh data
+  if (result.success) {
+    revalidatePostsCache().catch((err) => {
+      console.error("[toggleLikeAction] Error revalidating cache:", err);
+    });
+  }
+
+  return result;
 }

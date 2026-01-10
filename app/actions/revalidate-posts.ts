@@ -60,6 +60,7 @@ export async function revalidatePostsCache(): Promise<{
     // Layer 2: Revalidate Next.js Data Cache tags
     revalidateTag(CACHE_TAGS.POSTS, CACHE_PROFILE);
     revalidateTag(CACHE_TAGS.HOME_POSTS, CACHE_PROFILE);
+    revalidateTag(CACHE_TAGS.RANKED_POSTS, CACHE_PROFILE);
     // Also revalidate profiles cache for updated likes count on profile pages
     revalidateTag(PROFILE_CACHE_TAGS.PROFILES, CACHE_PROFILE);
 
@@ -69,7 +70,7 @@ export async function revalidatePostsCache(): Promise<{
 
     return {
       success: true,
-      revalidatedTags: [CACHE_TAGS.POSTS, CACHE_TAGS.HOME_POSTS, PROFILE_CACHE_TAGS.PROFILES],
+      revalidatedTags: [CACHE_TAGS.POSTS, CACHE_TAGS.HOME_POSTS, CACHE_TAGS.RANKED_POSTS, PROFILE_CACHE_TAGS.PROFILES],
     };
   } catch (error) {
     console.error("[Server Action] Error revalidating cache:", error);
