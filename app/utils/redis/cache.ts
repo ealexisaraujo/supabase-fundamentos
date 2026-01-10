@@ -19,7 +19,7 @@
  * @see app/utils/redis/client.ts for Redis client configuration
  */
 
-import { getUpstashClient, isRedisConfigured } from "./client";
+import { getUpstashClient, isRedisConfigured, ensureRedisReady } from "./client";
 
 /**
  * Cache key generators
@@ -68,6 +68,7 @@ export const cacheTags = {
 
 /**
  * Get a value from Redis cache
+ * Works with both Upstash (HTTP) and local Redis (TCP)
  *
  * @param key - The cache key to retrieve
  * @returns The cached value or null if not found/error
@@ -76,21 +77,41 @@ export const cacheTags = {
  * const posts = await getFromCache<Post[]>(cacheKeys.homePosts(0, 10));
  */
 export async function getFromCache<T>(key: string): Promise<T | null> {
-  const redis = await getUpstashClient();
+  const startTime = Date.now();
+
+  // Try Upstash first
+  const upstash = await getUpstashClient();
+  if (upstash) {
+    try {
+      const data = await upstash.get<T>(key);
+      const duration = Date.now() - startTime;
+
+      if (data !== null) {
+        console.log(`[Redis] HIT ${key} (${duration}ms)`);
+      } else {
+        console.log(`[Redis] MISS ${key} (${duration}ms)`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`[Redis] Upstash error getting from cache (${key}):`, error);
+    }
+  }
+
+  // Fall back to unified client (local Redis)
+  const redis = await ensureRedisReady();
   if (!isRedisConfigured || !redis) {
     return null;
   }
-
-  const startTime = Date.now();
 
   try {
     const data = await redis.get<T>(key);
     const duration = Date.now() - startTime;
 
     if (data !== null) {
-      console.log(`[Redis] HIT ${key} (${duration}ms)`);
+      console.log(`[Redis] HIT ${key} (local, ${duration}ms)`);
     } else {
-      console.log(`[Redis] MISS ${key} (${duration}ms)`);
+      console.log(`[Redis] MISS ${key} (local, ${duration}ms)`);
     }
 
     return data;
@@ -117,7 +138,31 @@ export async function setInCache<T>(
   ttlSeconds?: number,
   tags?: string[]
 ): Promise<void> {
-  const redis = await getUpstashClient();
+  // Try Upstash first (supports TTL options natively)
+  const upstash = await getUpstashClient();
+  if (upstash) {
+    const startTime = Date.now();
+    try {
+      if (ttlSeconds && ttlSeconds > 0) {
+        await upstash.set(key, value, { ex: ttlSeconds });
+      } else {
+        await upstash.set(key, value);
+      }
+
+      if (tags && tags.length > 0) {
+        await Promise.all(tags.map((tag) => upstash.sadd(tag, key)));
+      }
+
+      const duration = Date.now() - startTime;
+      console.log(`[Redis] SET ${key} (TTL: ${ttlSeconds || 'none'}s, ${duration}ms)`);
+      return;
+    } catch (error) {
+      console.error(`[Redis] Upstash error setting cache (${key}):`, error);
+    }
+  }
+
+  // Fall back to unified client (local Redis)
+  const redis = await ensureRedisReady();
   if (!isRedisConfigured || !redis) {
     return;
   }
@@ -125,12 +170,12 @@ export async function setInCache<T>(
   const startTime = Date.now();
 
   try {
-    // Set the cache value with optional TTL
-    if (ttlSeconds && ttlSeconds > 0) {
-      await redis.set(key, value, { ex: ttlSeconds });
-    } else {
-      await redis.set(key, value);
-    }
+    // For local Redis, serialize to JSON string
+    const serialized = JSON.stringify(value);
+    await redis.set(key, serialized);
+
+    // Note: Local Redis wrapper doesn't support TTL in set()
+    // We rely on manual cleanup or tag-based invalidation
 
     // Add key to tag sets for grouped invalidation
     if (tags && tags.length > 0) {
@@ -138,8 +183,7 @@ export async function setInCache<T>(
     }
 
     const duration = Date.now() - startTime;
-    const ttlInfo = ttlSeconds ? `TTL: ${ttlSeconds}s` : "no TTL";
-    console.log(`[Redis] SET ${key} (${ttlInfo}, ${duration}ms)`);
+    console.log(`[Redis] SET ${key} (local, ${duration}ms)`);
   } catch (error) {
     console.error(`[Redis] Error setting cache (${key}):`, error);
   }
@@ -157,7 +201,37 @@ export async function setInCache<T>(
  * await invalidateCache("posts:home:*"); // Invalidate all home post pages
  */
 export async function invalidateCache(pattern: string): Promise<void> {
-  const redis = await getUpstashClient();
+  // Try Upstash first
+  const upstash = await getUpstashClient();
+  if (upstash) {
+    const startTime = Date.now();
+    try {
+      let cursor: number = 0;
+      let deletedCount = 0;
+
+      do {
+        const result = await upstash.scan(cursor, { match: pattern, count: 100 });
+        cursor = typeof result[0] === "string" ? parseInt(result[0], 10) : result[0];
+        const keys = result[1];
+
+        if (keys.length > 0) {
+          await upstash.del(...keys);
+          deletedCount += keys.length;
+        }
+      } while (cursor !== 0);
+
+      const duration = Date.now() - startTime;
+      console.log(
+        `[Redis] INVALIDATE pattern "${pattern}" (${deletedCount} keys deleted, ${duration}ms)`
+      );
+      return;
+    } catch (error) {
+      console.error(`[Redis] Upstash error invalidating cache (${pattern}):`, error);
+    }
+  }
+
+  // Fall back to unified client (local Redis)
+  const redis = await ensureRedisReady();
   if (!isRedisConfigured || !redis) {
     return;
   }
@@ -171,7 +245,6 @@ export async function invalidateCache(pattern: string): Promise<void> {
 
     do {
       const result = await redis.scan(cursor, { match: pattern, count: 100 });
-      // Upstash returns cursor as number
       cursor = typeof result[0] === "string" ? parseInt(result[0], 10) : result[0];
       const keys = result[1];
 
@@ -183,7 +256,7 @@ export async function invalidateCache(pattern: string): Promise<void> {
 
     const duration = Date.now() - startTime;
     console.log(
-      `[Redis] INVALIDATE pattern "${pattern}" (${deletedCount} keys deleted, ${duration}ms)`
+      `[Redis] INVALIDATE pattern "${pattern}" (local, ${deletedCount} keys deleted, ${duration}ms)`
     );
   } catch (error) {
     console.error(`[Redis] Error invalidating cache (${pattern}):`, error);
@@ -202,7 +275,30 @@ export async function invalidateCache(pattern: string): Promise<void> {
  * await invalidateCacheByTag(cacheTags.POSTS); // Invalidate all posts
  */
 export async function invalidateCacheByTag(tag: string): Promise<void> {
-  const redis = await getUpstashClient();
+  // Try Upstash first
+  const upstash = await getUpstashClient();
+  if (upstash) {
+    const startTime = Date.now();
+    try {
+      const keys = await upstash.smembers(tag);
+
+      if (keys.length > 0) {
+        await upstash.del(...keys);
+        await upstash.del(tag);
+      }
+
+      const duration = Date.now() - startTime;
+      console.log(
+        `[Redis] INVALIDATE tag "${tag}" (${keys.length} keys deleted, ${duration}ms)`
+      );
+      return;
+    } catch (error) {
+      console.error(`[Redis] Upstash error invalidating by tag (${tag}):`, error);
+    }
+  }
+
+  // Fall back to unified client (local Redis)
+  const redis = await ensureRedisReady();
   if (!isRedisConfigured || !redis) {
     return;
   }
@@ -222,7 +318,7 @@ export async function invalidateCacheByTag(tag: string): Promise<void> {
 
     const duration = Date.now() - startTime;
     console.log(
-      `[Redis] INVALIDATE tag "${tag}" (${keys.length} keys deleted, ${duration}ms)`
+      `[Redis] INVALIDATE tag "${tag}" (local, ${keys.length} keys deleted, ${duration}ms)`
     );
   } catch (error) {
     console.error(`[Redis] Error invalidating by tag (${tag}):`, error);
@@ -238,7 +334,10 @@ export async function invalidateCacheByTag(tag: string): Promise<void> {
  * await invalidateMultipleTags([cacheTags.POSTS, cacheTags.HOME]);
  */
 export async function invalidateMultipleTags(tags: string[]): Promise<void> {
-  const redis = await getUpstashClient();
+  // Check if any Redis client is available
+  const upstash = await getUpstashClient();
+  const redis = upstash || await ensureRedisReady();
+
   if (!isRedisConfigured || !redis) {
     return;
   }
@@ -248,21 +347,39 @@ export async function invalidateMultipleTags(tags: string[]): Promise<void> {
 
 /**
  * Check if Redis is available and functioning
+ * Works with both Upstash (HTTP) and local Redis (TCP)
  *
  * @returns true if Redis is configured and responding
  */
 export async function isRedisAvailable(): Promise<boolean> {
-  const redis = await getUpstashClient();
-  if (!isRedisConfigured || !redis) {
+  if (!isRedisConfigured) {
     return false;
   }
 
-  try {
-    await redis.ping();
-    return true;
-  } catch {
-    return false;
+  // Try Upstash first
+  const upstash = await getUpstashClient();
+  if (upstash) {
+    try {
+      await upstash.ping();
+      return true;
+    } catch {
+      // Fall through to try unified client
+    }
   }
+
+  // Try unified client (works for both Upstash and local Redis)
+  const redis = await ensureRedisReady();
+  if (redis) {
+    try {
+      // For local Redis, try a simple get operation to verify connection
+      await redis.get("__health_check__");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 /**

@@ -10,9 +10,16 @@
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getFromCache, cacheKeys, isRedisAvailable } from "../../utils/redis";
+import { getFromCache, cacheKeys, isRedisAvailable, ensureRedisReady } from "../../utils/redis";
 import { RANK_MIN_LIKES } from "../../utils/cached-posts";
 import type { Post } from "../../mocks/posts";
+
+// Environment detection
+const isUpstashConfigured = Boolean(
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+);
+const isLocalRedisEnabled = Boolean(process.env.REDIS_URL) ||
+  (process.env.NODE_ENV === "development" && !isUpstashConfigured);
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -37,10 +44,19 @@ export async function GET(): Promise<NextResponse<HealthResponse>> {
 
   // 1. Check Redis availability
   const redisAvailable = await isRedisAvailable();
+  const redisType = isUpstashConfigured ? "Upstash (HTTP)" : isLocalRedisEnabled ? "Local (TCP)" : "None";
+
   checks.push({
     name: "redis_connection",
     status: redisAvailable ? "pass" : "warn",
-    message: redisAvailable ? "Redis is available" : "Redis is not configured/available",
+    message: redisAvailable
+      ? `Redis is available (${redisType})`
+      : `Redis is not configured/available (expected: ${redisType})`,
+    details: {
+      type: redisType,
+      upstashConfigured: isUpstashConfigured,
+      localRedisEnabled: isLocalRedisEnabled,
+    },
   });
 
   // 2. Query Supabase for ranked posts (source of truth)

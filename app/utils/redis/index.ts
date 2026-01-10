@@ -14,7 +14,7 @@
  */
 
 // Client exports
-export { redis, getRedisClient, isRedisConfigured } from "./client";
+export { redis, getRedisClient, isRedisConfigured, ensureRedisReady } from "./client";
 
 // Cache utility exports
 export {

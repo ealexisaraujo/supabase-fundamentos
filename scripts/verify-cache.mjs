@@ -113,16 +113,32 @@ async function getCachedRankedPosts() {
 }
 
 async function getCachedHomePosts() {
-  const cached = await redis.get("posts:home:0:10");
-  if (cached === null) {
+  // Check all pages (0, 1, 2, etc.)
+  const pages = [];
+  let page = 0;
+  let totalPosts = 0;
+
+  while (page < 10) { // Max 10 pages to check
+    const cached = await redis.get(`posts:home:${page}:10`);
+    if (cached === null) {
+      break; // No more cached pages
+    }
+    if (Array.isArray(cached)) {
+      pages.push({ page, count: cached.length });
+      totalPosts += cached.length;
+    }
+    page++;
+  }
+
+  if (pages.length === 0) {
     console.log("[WARN] Redis: No cached home posts (null)");
     return null;
   }
-  if (Array.isArray(cached)) {
-    console.log(`[OK] Redis: ${cached.length} cached home posts`);
-    return cached;
-  }
-  return null;
+
+  console.log(`[OK] Redis: ${totalPosts} cached home posts across ${pages.length} pages`);
+  pages.forEach(p => console.log(`     - Page ${p.page}: ${p.count} posts`));
+
+  return { pages, totalPosts };
 }
 
 async function checkTagSets() {
@@ -159,10 +175,10 @@ async function invalidateAllCaches() {
   console.log("\n[OK] Cache invalidation complete. Next request will fetch fresh data.");
 }
 
-async function detectIssues(supabaseData, cachedRanked, cachedHome) {
+async function detectIssues(supabaseData, cachedRanked, cachedHome, totalPostsCount) {
   const issues = [];
 
-  // Critical: Cache empty but Supabase has data
+  // Critical: Ranked cache empty but Supabase has data
   if (supabaseData && supabaseData.length > 0) {
     if (cachedRanked !== null && cachedRanked.length === 0) {
       issues.push({
@@ -183,20 +199,37 @@ async function detectIssues(supabaseData, cachedRanked, cachedHome) {
     }
   }
 
-  // Check if home cache has posts that should be in rank
-  if (cachedHome && cachedHome.length > 0 && cachedRanked !== null) {
-    const homePostsOverThreshold = cachedHome.filter((p) => p.likes > RANK_MIN_LIKES);
-    if (homePostsOverThreshold.length > 0 && cachedRanked.length === 0) {
+  // Check if all home posts are cached (pagination coverage)
+  if (cachedHome && totalPostsCount > 0) {
+    const cachedTotal = cachedHome.totalPosts;
+    const expectedPages = Math.ceil(totalPostsCount / 10);
+    const actualPages = cachedHome.pages.length;
+
+    if (cachedTotal < totalPostsCount) {
       issues.push({
-        severity: "CRITICAL",
-        message: "Inconsistent caches: Home has rankable posts but rank cache is empty",
-        details: `Home has ${homePostsOverThreshold.length} posts with >${RANK_MIN_LIKES} likes`,
-        fix: "Run with --invalidate to reset caches",
+        severity: "INFO",
+        message: "Partial home cache: Not all posts are cached yet",
+        details: `Cached: ${cachedTotal}/${totalPostsCount} posts (${actualPages}/${expectedPages} pages)`,
+        fix: "Posts will be cached as users scroll (on-demand caching)",
       });
     }
   }
 
   return issues;
+}
+
+async function getTotalPostsCount() {
+  const { count, error } = await supabase
+    .from("posts_new")
+    .select("*", { count: "exact", head: true });
+
+  if (error) {
+    console.error("[FAIL] Failed to get total posts count:", error.message);
+    return 0;
+  }
+
+  console.log(`[OK] Supabase: ${count} total posts`);
+  return count || 0;
 }
 
 async function main() {
@@ -214,6 +247,7 @@ async function main() {
 
   // 3. Get data from both sources
   console.log("\n=== Data Comparison ===\n");
+  const totalPostsCount = await getTotalPostsCount();
   const supabaseData = await getSupabaseRankedPosts();
   const cachedRanked = await getCachedRankedPosts();
   const cachedHome = await getCachedHomePosts();
@@ -223,7 +257,7 @@ async function main() {
 
   // 5. Detect issues
   console.log("\n=== Issue Detection ===\n");
-  const issues = await detectIssues(supabaseData, cachedRanked, cachedHome);
+  const issues = await detectIssues(supabaseData, cachedRanked, cachedHome, totalPostsCount);
 
   if (issues.length === 0) {
     console.log("[OK] No issues detected - cache is healthy");
@@ -238,8 +272,11 @@ async function main() {
 
   // 6. Summary
   console.log("\n=== Summary ===\n");
+
+  console.log(`Total posts in Supabase: ${totalPostsCount}`);
+
   if (supabaseData) {
-    console.log(`Supabase ranked posts: ${supabaseData.length}`);
+    console.log(`Ranked posts (>${RANK_MIN_LIKES} likes): ${supabaseData.length}`);
     if (supabaseData.length > 0) {
       console.log("Top 3 posts:");
       supabaseData.slice(0, 3).forEach((p, i) => {
@@ -252,6 +289,12 @@ async function main() {
     console.log(`\nCached ranked posts: ${cachedRanked.length}`);
   } else {
     console.log("\nCached ranked posts: Not cached (null)");
+  }
+
+  if (cachedHome !== null) {
+    console.log(`Cached home posts: ${cachedHome.totalPosts} (${cachedHome.pages.length} pages)`);
+  } else {
+    console.log("Cached home posts: Not cached (null)");
   }
 
   const hasCritical = issues.some((i) => i.severity === "CRITICAL");

@@ -21,7 +21,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { getPostsWithLikeStatus } from "../utils/posts";
+import { fetchCachedPostsPage } from "../actions/cached-posts";
 import { fetchCountsFromRedis } from "../utils/posts-with-counts";
 import type { Post } from "../mocks/posts";
 import { PostCard } from "./PostCard";
@@ -52,7 +52,7 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const observerTarget = useRef<HTMLDivElement>(null);
-  const POSTS_PER_PAGE = 5;
+  const POSTS_PER_PAGE = 10; // Must match cache key: posts:home:{page}:10
 
   // Fetch counts and liked status from Redis with TanStack Query caching
   // Redis is the source of truth for counters, ensuring consistency across views
@@ -129,7 +129,12 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
 
   /**
    * Fetches additional posts for infinite scroll
-   * This is used for loading MORE posts (pagination), not initial load
+   * Uses Redis-cached server action for all pages (not just initial load)
+   *
+   * Architecture:
+   * fetchMorePosts → fetchCachedPostsPage (server action) → Redis → Supabase
+   *
+   * Each page is cached separately: posts:home:1:10, posts:home:2:10, etc.
    */
   const fetchMorePosts = useCallback(async (pageNum: number) => {
     if (!sessionId) return;
@@ -137,22 +142,35 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
     setLoadingMore(true);
 
     try {
-      const data = await getPostsWithLikeStatus(sessionId, {
-        page: pageNum,
-        limit: POSTS_PER_PAGE,
-      });
+      // Use Redis-cached server action for ALL pages
+      const response = await fetchCachedPostsPage(pageNum, POSTS_PER_PAGE);
 
-      if (data.length < POSTS_PER_PAGE) {
+      // Merge with fresh like counts from Redis
+      let postsWithLikes = response.posts;
+      if (postsWithLikes.length > 0) {
+        const postIds = postsWithLikes.map((p) => String(p.id));
+        const { countsMap, likedMap } = await fetchCountsFromRedis(postIds, sessionId);
+
+        postsWithLikes = postsWithLikes.map((post) => ({
+          ...post,
+          likes: countsMap.get(String(post.id)) ?? post.likes,
+          isLiked: likedMap.get(String(post.id)) ?? false,
+        }));
+      }
+
+      if (!response.hasMore) {
         setHasMore(false);
       }
 
       // Deduplicate posts to prevent "duplicate key" React errors
       setPosts((prev) => {
         const existingIds = new Set(prev.map(p => String(p.id)));
-        const newPosts = data.filter(p => !existingIds.has(String(p.id)));
+        const newPosts = postsWithLikes.filter(p => !existingIds.has(String(p.id)));
         return [...prev, ...newPosts];
       });
       setPage(pageNum);
+
+      console.log(`[HomeFeed] Loaded page ${pageNum} (${postsWithLikes.length} posts, fromCache: ${response.fromCache})`);
     } catch (error) {
       console.error("[HomeFeed] Error fetching more posts:", error);
     } finally {
