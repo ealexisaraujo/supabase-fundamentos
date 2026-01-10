@@ -564,6 +564,175 @@ app/
 
 ---
 
+## CRITICAL FIX: Identity Persistence for Authenticated Users
+
+### Problem Discovered (January 2026)
+
+The original architecture uses `session_id` (localStorage UUID) for ALL users, including authenticated ones. This creates a **critical bug**:
+
+1. User logs in with email/password
+2. User likes posts → stored against `session_id` in Redis and `post_ratings`
+3. User clears site data OR uses different browser/device
+4. User logs in again → gets a NEW `session_id`
+5. **Their likes are "lost"** because they're tied to the OLD session
+
+### Root Cause
+
+```
+CURRENT (BROKEN):
+┌────────────────┐     ┌──────────────┐     ┌──────────────────┐
+│  localStorage  │────>│    Redis     │────>│  post_ratings    │
+│  session-id    │     │ post:liked:* │     │  session_id only │
+│  (ephemeral)   │     │              │     │  (no profile_id) │
+└────────────────┘     └──────────────┘     └──────────────────┘
+
+Problem: Clear site data = New session_id = Likes LOST!
+```
+
+### Solution: Dual Identity System
+
+For **anonymous users**: Continue using `session_id` (no account, just browser tracking)
+For **authenticated users**: Use `profile_id` so likes persist across devices/browsers
+
+```
+FIXED ARCHITECTURE:
+┌────────────────────────────────────────────────────────────────┐
+│                     IDENTITY RESOLUTION                        │
+│                                                                │
+│  if (user.isAuthenticated) {                                  │
+│    identifier = profile_id   // Persistent across devices     │
+│    identifierType = 'profile'                                 │
+│  } else {                                                     │
+│    identifier = session_id   // Browser-only tracking         │
+│    identifierType = 'session'                                 │
+│  }                                                            │
+└────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────┐                 ┌─────────────────────┐
+│   Redis Keys        │                 │  post_ratings       │
+│                     │                 │                     │
+│ post:liked:{postId} │                 │ session_id (nullable)│
+│   Set<identifier>   │                 │ profile_id (nullable)│
+│                     │                 │ CHECK: one must be set│
+│ profile:likes:{pid} │                 │                     │
+│   Set<postId>       │                 │                     │
+│                     │                 │                     │
+│ session:likes:{sid} │                 │                     │
+│   Set<postId>       │                 │                     │
+└─────────────────────┘                 └─────────────────────┘
+```
+
+### Database Migration Required
+
+```sql
+-- Migration: Add profile_id to post_ratings
+ALTER TABLE post_ratings
+ADD COLUMN profile_id uuid REFERENCES profiles(id) ON DELETE CASCADE;
+
+-- Allow session_id to be nullable (for profile-based likes)
+ALTER TABLE post_ratings
+ALTER COLUMN session_id DROP NOT NULL;
+
+-- Add constraint: either session_id OR profile_id must be set
+ALTER TABLE post_ratings
+ADD CONSTRAINT check_identity
+CHECK (session_id IS NOT NULL OR profile_id IS NOT NULL);
+
+-- Update unique constraint for profile-based likes
+CREATE UNIQUE INDEX idx_post_ratings_profile
+ON post_ratings(post_id, profile_id)
+WHERE profile_id IS NOT NULL;
+
+-- Index for profile lookups
+CREATE INDEX idx_post_ratings_profile_id ON post_ratings(profile_id);
+```
+
+### Updated Redis Key Schema
+
+```
+# Like count per post (unchanged)
+post:likes:{postId} = "447"
+
+# Set of identifiers that liked a post (mixed sessions and profiles)
+post:liked:{postId} = Set<"session:{sessionId}" | "profile:{profileId}">
+
+# Set of post IDs liked by a session (anonymous users)
+session:likes:{sessionId} = Set<postId>
+
+# Set of post IDs liked by a profile (authenticated users) - NEW!
+profile:likes:{profileId} = Set<postId>
+```
+
+### Updated Counter Functions
+
+```typescript
+// Updated toggleLike signature
+export async function toggleLike(
+  postId: string,
+  sessionId: string,
+  profileId?: string  // NEW: optional profile ID for authenticated users
+): Promise<LikeResult>
+
+// Updated getLikedStatuses signature
+export async function getLikedStatuses(
+  postIds: string[],
+  sessionId: string,
+  profileId?: string  // NEW: check profile likes if authenticated
+): Promise<Map<string, boolean>>
+
+// NEW: Migrate session likes to profile on login
+export async function migrateSessionLikesToProfile(
+  sessionId: string,
+  profileId: string
+): Promise<void>
+```
+
+### Implementation Changes Required
+
+1. **`app/utils/redis/counters.ts`**:
+   - Update `toggleLike()` to accept optional `profileId`
+   - Use `profile:{profileId}` as identifier when authenticated
+   - Update `getLikedStatuses()` to check both session and profile
+
+2. **`app/utils/redis/sync.ts`**:
+   - Update `syncLikeToSupabase()` to store `profile_id` when available
+   - Add `migrateSessionLikesToProfile()` function
+
+3. **`app/hooks/useLikeHandler.ts`**:
+   - Pass `user.profile_id` when authenticated
+   - On login, call migration function
+
+4. **`post_ratings` table**:
+   - Add `profile_id` column
+   - Update RLS policies
+
+### Login Flow: Migrate Session Likes
+
+When a user logs in, optionally merge their anonymous session likes to their profile:
+
+```typescript
+// In AuthProvider or login handler
+async function handleLoginComplete(userId: string) {
+  const profileId = await getProfileIdForUser(userId);
+  const sessionId = getSessionId();
+
+  // Migrate any session likes to the profile
+  await migrateSessionLikesToProfile(sessionId, profileId);
+
+  // Clear session likes after migration
+  await clearSessionLikes(sessionId);
+}
+```
+
+### Backward Compatibility
+
+- Existing session-based likes continue to work
+- Only new likes by authenticated users get profile_id
+- Optional: Migration script to associate historical session likes with profiles (if session→user mapping exists)
+
+---
+
 *Document created: January 2026*
-*Last updated: January 2026*
+*Last updated: January 2026 - Added Identity Persistence Fix*
 *Author: Architecture Review*
