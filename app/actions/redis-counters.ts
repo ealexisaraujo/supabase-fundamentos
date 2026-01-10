@@ -29,11 +29,6 @@ export interface CountsAndLikedResultSerialized {
   likedArray: [string, boolean][];
 }
 
-export interface CountsAndLikedResult {
-  countsMap: Map<string, number>;
-  likedMap: Map<string, boolean>;
-}
-
 /**
  * Fetch counts and liked status for multiple posts
  * Called from client components via server action

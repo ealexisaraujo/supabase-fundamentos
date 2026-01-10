@@ -1,12 +1,12 @@
-# Redis Counter Implementation - Ralph Prompt
+"# Redis Counter Implementation - Ralph Prompt
 
 ## Usage
 
-```bash
+bash
 /ralph-loop "$(cat docs/prompts/redis-counter-implementation.md)" --max-iterations 30 --completion-promise "REDIS_COUNTERS_COMPLETE"
-```
 
----
+
+---"
 
 # Task: Implement Redis-Based Counter System
 
@@ -20,13 +20,13 @@ You are implementing a Redis-based counter system for like counts in a Next.js +
 
 **Root Cause:** Fire-and-forget cache invalidation pattern creates race conditions:
 
-```text
+text
 Like → Supabase RPC → revalidatePostsCache().catch() → RETURNS IMMEDIATELY
                                     ↓ (async, ~200ms)
                               Cache invalidation completes
                                     ↓
                         User already navigated (sees stale data)
-```
+
 
 **Why This Happens:**
 
@@ -51,7 +51,7 @@ Like → Supabase RPC → revalidatePostsCache().catch() → RETURNS IMMEDIATELY
 
 ### Architecture Diagram
 
-```text
+text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           CLIENT (Browser)                               │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -99,7 +99,7 @@ Like → Supabase RPC → revalidatePostsCache().catch() → RETURNS IMMEDIATELY
 └─────────────────────┘  └─────────────────────┘
         │                         ▲
         └────── async sync ───────┘
-```
+
 
 ---
 
@@ -107,29 +107,29 @@ Like → Supabase RPC → revalidatePostsCache().catch() → RETURNS IMMEDIATELY
 
 ### Like Flow (Target: < 20ms response)
 
-```text
+text
 1. User clicks like
 2. Redis INCR post:likes:{postId}     (1-5ms, atomic)
 3. Redis SADD post:liked:{postId}     (1-5ms, atomic)
 4. Return new count to client         (instant)
 5. Background: Supabase UPDATE        (async, 50-200ms)
 6. Supabase Realtime broadcasts       (async, 200-500ms)
-```
+
 
 ### Load Posts Flow (Any View)
 
-```text
+text
 1. Fetch posts from Supabase/cache (content only, no likes)
 2. Redis MGET all like counts        (batch, 5-10ms)
 3. Redis SMEMBERS liked status       (batch, 5-10ms)
 4. Merge and return to client
-```
+
 
 ---
 
 ## Redis Key Schema
 
-```text
+text
 # Like count per post (String with atomic INCR/DECR)
 post:likes:{postId} = "447"
 
@@ -138,11 +138,11 @@ post:liked:{postId} = Set<sessionId>
 
 # Set of post IDs liked by a session (for batch queries)
 session:likes:{sessionId} = Set<postId>
-```
+
 
 ### Example Redis Commands
 
-```redis
+redis
 # Get like count
 GET post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
 > "447"
@@ -164,7 +164,7 @@ SADD session:likes:{sessionId} {postId}
 DECR post:likes:{postId}
 SREM post:liked:{postId} {sessionId}
 SREM session:likes:{sessionId} {postId}
-```
+
 
 ---
 
@@ -188,7 +188,7 @@ Before implementing, read these existing files to understand the current code:
 
 **Create file:** `app/utils/redis/counters.ts`
 
-```typescript
+typescript
 /**
  * Redis Counter Service
  *
@@ -250,7 +250,7 @@ export async function syncCounterFromDB(postId: string): Promise<number>
  * Initialize all counters from Supabase (cold start)
  */
 export async function initializeCountersFromDB(): Promise<void>
-```
+
 
 **Implementation requirements:**
 
@@ -283,7 +283,7 @@ This service syncs Redis state to Supabase for durability. It's called AFTER Red
 
 **IMPORTANT - How Supabase sync works:**
 
-```typescript
+typescript
 /**
  * Background Sync Service
  *
@@ -413,7 +413,7 @@ export async function reconcileCounter(postId: string): Promise<void> {
     console.error("[RedisSync] Reconciliation failed:", error);
   }
 }
-```
+
 
 **Key design decisions:**
 
@@ -459,7 +459,7 @@ export async function reconcileCounter(postId: string): Promise<void> {
 
 **Key change in handleLike:**
 
-```typescript
+typescript
 // OLD (remove this):
 const result = await togglePostLike(postIdStr, sessionId);
 // ... cache invalidation ...
@@ -471,7 +471,7 @@ if (result.success) {
   syncLikeToSupabase(postIdStr, sessionId, result.isLiked, result.newCount)
     .catch(err => console.error('[useLikeHandler] Sync error:', err));
 }
-```
+
 
 **Verification checklist:**
 
@@ -486,7 +486,7 @@ if (result.success) {
 
 **Create file:** `app/utils/posts-with-counts.ts`
 
-```typescript
+typescript
 /**
  * Utility to merge posts with Redis counts
  */
@@ -501,7 +501,7 @@ export async function mergePostsWithCounts(
   posts: Array<Omit<Post, 'likes' | 'isLiked'>>,
   sessionId: string
 ): Promise<Post[]>
-```
+
 
 **Modify files:**
 
@@ -534,7 +534,7 @@ export async function mergePostsWithCounts(
 
 **Create file:** `scripts/migrate-counters-to-redis.ts`
 
-```typescript
+typescript
 /**
  * One-time migration script to populate Redis with existing data
  *
@@ -553,7 +553,7 @@ async function migrateCountersToRedis() {
 }
 
 migrateCountersToRedis();
-```
+
 
 **Verification checklist:**
 
@@ -570,7 +570,7 @@ migrateCountersToRedis();
 
 Add exports for new modules:
 
-```typescript
+typescript
 // Existing exports
 export * from "./client";
 export * from "./cache";
@@ -578,7 +578,7 @@ export * from "./cache";
 // NEW exports
 export * from "./counters";
 export * from "./sync";
-```
+
 
 ---
 
@@ -586,7 +586,7 @@ export * from "./sync";
 
 Run after each phase:
 
-```bash
+bash
 # TypeScript check
 npx tsc --noEmit
 
@@ -595,7 +595,7 @@ npm run build
 
 # Unit tests
 npm run test
-```
+
 
 ---
 
@@ -623,7 +623,7 @@ npm run test
 
 All counter functions must fallback to Supabase:
 
-```typescript
+typescript
 async function getLikeCount(postId: string): Promise<number> {
   if (!isRedisConfigured || !redis) {
     // Fallback to Supabase
@@ -636,17 +636,17 @@ async function getLikeCount(postId: string): Promise<number> {
   }
   // ... Redis logic
 }
-```
+
 
 ### If sync fails
 
 Log error but don't fail the like operation:
 
-```typescript
+typescript
 syncLikeToSupabase(postId, sessionId, isLiked, newCount)
   .catch(err => console.error('[Sync] Failed:', err));
 // Don't await, don't throw
-```
+
 
 ---
 
@@ -692,4 +692,4 @@ ALL of these must be true:
 
 When ALL criteria are verified and working:
 
-**Do NOT output this until manual verification passes with consistent counts across all views.**
+Output <promise>REDIS_COUNTERS_COMPLETE</promise>  when done."

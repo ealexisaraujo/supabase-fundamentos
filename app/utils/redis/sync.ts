@@ -17,7 +17,6 @@
 import { supabase } from "../client";
 import { ensureRedisReady, isRedisConfigured } from "./client";
 import { counterKeys } from "./counters";
-import { revalidatePostsCache } from "../../actions/revalidate-posts";
 
 /**
  * Sync a like/unlike to Supabase (fire-and-forget)
@@ -86,11 +85,6 @@ export async function syncLikeToSupabase(
 
     // Note: Supabase Realtime will automatically broadcast this UPDATE
     // to all subscribed clients via the existing subscription in usePostLikesSubscription
-
-    // Invalidate server-side caches so next page load has fresh data
-    // This prevents the "flash" of old count on refresh
-    await revalidatePostsCache();
-    console.log(`[RedisSync] Cache invalidated for post=${postId}`);
   } catch (error) {
     // Log but never throw - this is fire-and-forget
     console.error("[RedisSync] Unexpected error during sync:", error);

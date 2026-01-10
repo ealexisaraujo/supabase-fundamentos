@@ -20,12 +20,6 @@
  */
 
 import { fetchCountsFromRedisAction } from "../actions/redis-counters";
-import {
-  getLikeCounts,
-  getLikedStatuses,
-  getLikeCount,
-  isLikedBySession,
-} from "./redis/counters";
 import type { Post } from "../mocks/posts";
 
 /**
@@ -115,7 +109,3 @@ export async function mergePostsWithCounts(
   });
 }
 
-/**
- * Re-export individual functions for convenience
- */
-export { getLikeCounts, getLikedStatuses, getLikeCount, isLikedBySession };

@@ -24,6 +24,32 @@ import { queryKeys } from "../providers";
 import type { Post } from "../mocks/posts";
 import type { CountsAndLikedResult } from "../utils/posts-with-counts";
 
+/**
+ * Helper to update TanStack Query cache for counts and liked status.
+ * Extracts common Map copying pattern to avoid duplication.
+ */
+function updateQueryCache(
+  old: CountsAndLikedResult | undefined,
+  postId: string,
+  updates: { liked: boolean; count?: number; countDelta?: number }
+): CountsAndLikedResult {
+  const countsMap = new Map(old?.countsMap ?? []);
+  const likedMap = new Map(old?.likedMap ?? []);
+
+  likedMap.set(postId, updates.liked);
+
+  if (updates.count !== undefined) {
+    countsMap.set(postId, updates.count);
+  } else if (updates.countDelta !== undefined) {
+    const current = countsMap.get(postId);
+    if (current !== undefined) {
+      countsMap.set(postId, current + updates.countDelta);
+    }
+  }
+
+  return { countsMap, likedMap };
+}
+
 /** Generic post type for state updates */
 interface PostLike {
   id: string | number;
@@ -128,28 +154,15 @@ export function useLikeHandler<T extends PostLike = Post>({
       // Update BOTH the view-specific cache AND the global shared cache
       const globalCountsKey = queryKeys.posts.counts(sessionId);
 
-      const updateCache = (old: CountsAndLikedResult | undefined) => {
-        const countsMap = old?.countsMap ? new Map(old.countsMap) : new Map<string, number>();
-        const likedMapCopy = old?.likedMap ? new Map(old.likedMap) : new Map<string, boolean>();
+      // Optimistic update: toggle liked, adjust count by delta (only if count exists)
+      const optimisticUpdate = (old: CountsAndLikedResult | undefined) =>
+        updateQueryCache(old, postIdStr, {
+          liked: !currentlyLiked,
+          countDelta: currentlyLiked ? -1 : 1,
+        });
 
-        // Update liked status
-        likedMapCopy.set(postIdStr, !currentlyLiked);
-
-        // Update count optimistically ONLY if we have a valid count in the cache
-        // This prevents showing 1 or -1 when countsMap hasn't loaded yet
-        const existingCount = countsMap.get(postIdStr);
-        if (existingCount !== undefined) {
-          countsMap.set(postIdStr, currentlyLiked ? existingCount - 1 : existingCount + 1);
-        }
-        // If no count in cache, don't set anything - the server response will update it
-
-        return { countsMap, likedMap: likedMapCopy };
-      };
-
-      // Update view-specific cache
-      queryClient.setQueryData(queryKey, updateCache);
-      // Update global shared cache (so other views see the change)
-      queryClient.setQueryData(globalCountsKey, updateCache);
+      queryClient.setQueryData(queryKey, optimisticUpdate);
+      queryClient.setQueryData(globalCountsKey, optimisticUpdate);
 
       // Mark as processing
       setIsLiking((prev) => new Set(prev).add(postIdStr));
@@ -196,21 +209,14 @@ export function useLikeHandler<T extends PostLike = Post>({
         }
 
         // Revert countsMap and likedMap cache (both view-specific and global)
-        const revertCache = (old: CountsAndLikedResult | undefined) => {
-          const countsMap = old?.countsMap ? new Map(old.countsMap) : new Map<string, number>();
-          const likedMapCopy = old?.likedMap ? new Map(old.likedMap) : new Map<string, boolean>();
+        const revertUpdate = (old: CountsAndLikedResult | undefined) =>
+          updateQueryCache(old, postIdStr, {
+            liked: currentlyLiked,
+            countDelta: currentlyLiked ? 1 : -1,
+          });
 
-          // Revert liked status
-          likedMapCopy.set(postIdStr, currentlyLiked);
-
-          // Revert count
-          const currentCount = countsMap.get(postIdStr) ?? 0;
-          countsMap.set(postIdStr, currentlyLiked ? currentCount + 1 : currentCount - 1);
-
-          return { countsMap, likedMap: likedMapCopy };
-        };
-        queryClient.setQueryData(queryKey, revertCache);
-        queryClient.setQueryData(globalCountsKey, revertCache);
+        queryClient.setQueryData(queryKey, revertUpdate);
+        queryClient.setQueryData(globalCountsKey, revertUpdate);
       } else {
         // Background sync to Supabase (fire-and-forget)
         // This updates Supabase for durability and triggers Realtime for other clients
@@ -244,17 +250,14 @@ export function useLikeHandler<T extends PostLike = Post>({
         }
 
         // Update cache with actual count from Redis (both view-specific and global)
-        const finalUpdateCache = (old: CountsAndLikedResult | undefined) => {
-          const countsMap = old?.countsMap ? new Map(old.countsMap) : new Map<string, number>();
-          const likedMapCopy = old?.likedMap ? new Map(old.likedMap) : new Map<string, boolean>();
+        const finalUpdate = (old: CountsAndLikedResult | undefined) =>
+          updateQueryCache(old, postIdStr, {
+            liked: result.isLiked,
+            count: result.newCount,
+          });
 
-          countsMap.set(postIdStr, result.newCount);
-          likedMapCopy.set(postIdStr, result.isLiked);
-
-          return { countsMap, likedMap: likedMapCopy };
-        };
-        queryClient.setQueryData(queryKey, finalUpdateCache);
-        queryClient.setQueryData(globalCountsKey, finalUpdateCache);
+        queryClient.setQueryData(queryKey, finalUpdate);
+        queryClient.setQueryData(globalCountsKey, finalUpdate);
       }
     },
     [sessionId, queryKey, setPosts, setSelectedPost, likedMap, isLiking, queryClient]

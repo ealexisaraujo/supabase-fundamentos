@@ -30,14 +30,14 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 // Validate environment
 if (!UPSTASH_REDIS_REST_URL || !UPSTASH_REDIS_REST_TOKEN) {
-  console.error("❌ Missing Redis environment variables:");
+  console.error("[Error] Missing Redis environment variables:");
   console.error("   - UPSTASH_REDIS_REST_URL");
   console.error("   - UPSTASH_REDIS_REST_TOKEN");
   process.exit(1);
 }
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error("❌ Missing Supabase environment variables:");
+  console.error("[Error] Missing Supabase environment variables:");
   console.error("   - NEXT_PUBLIC_SUPABASE_URL");
   console.error("   - NEXT_PUBLIC_SUPABASE_ANON_KEY");
   process.exit(1);
@@ -59,18 +59,18 @@ const counterKeys = {
 };
 
 async function migrateCountersToRedis() {
-  console.log("🚀 Starting counter migration to Redis...\n");
+  console.log("[Migration] Starting counter migration to Redis...\n");
 
   try {
     // Step 1: Migrate post like counts
-    console.log("📊 Step 1: Migrating post like counts...");
+    console.log("[Step 1] Migrating post like counts...");
 
     const { data: posts, error: postsError } = await supabase
       .from("posts_new")
       .select("id, likes");
 
     if (postsError) {
-      console.error("❌ Failed to fetch posts:", postsError);
+      console.error("[Error] Failed to fetch posts:", postsError);
       process.exit(1);
     }
 
@@ -83,18 +83,18 @@ async function migrateCountersToRedis() {
         await redis.set(key, post.likes ?? 0);
         migratedPosts++;
       }
-      console.log(`   ✅ Migrated ${migratedPosts} post counters`);
+      console.log(`   [OK] Migrated ${migratedPosts} post counters`);
     }
 
     // Step 2: Migrate liked sets
-    console.log("\n👍 Step 2: Migrating liked sets...");
+    console.log("\n[Step 2] Migrating liked sets...");
 
     const { data: ratings, error: ratingsError } = await supabase
       .from("post_ratings")
       .select("post_id, session_id");
 
     if (ratingsError) {
-      console.error("❌ Failed to fetch ratings:", ratingsError);
+      console.error("[Error] Failed to fetch ratings:", ratingsError);
       process.exit(1);
     }
 
@@ -110,11 +110,11 @@ async function migrateCountersToRedis() {
         await redis.sadd(sessionLikesKey, rating.post_id);
         migratedRatings++;
       }
-      console.log(`   ✅ Migrated ${migratedRatings} rating records`);
+      console.log(`   [OK] Migrated ${migratedRatings} rating records`);
     }
 
     // Step 3: Verify migration
-    console.log("\n🔍 Step 3: Verifying migration...");
+    console.log("\n[Step 3] Verifying migration...");
 
     let verificationPassed = true;
     let verifiedCount = 0;
@@ -126,7 +126,7 @@ async function migrateCountersToRedis() {
       const redisCount = await redis.get<number>(key);
 
       if (redisCount !== post.likes) {
-        console.log(`   ❌ Mismatch for post ${post.id}: DB=${post.likes}, Redis=${redisCount}`);
+        console.log(`   [Mismatch] Post ${post.id}: DB=${post.likes}, Redis=${redisCount}`);
         verificationPassed = false;
       } else {
         verifiedCount++;
@@ -134,23 +134,23 @@ async function migrateCountersToRedis() {
     }
 
     if (verificationPassed && sampleSize > 0) {
-      console.log(`   ✅ Verified ${verifiedCount} post counters match`);
+      console.log(`   [OK] Verified ${verifiedCount} post counters match`);
     }
 
     // Final summary
     console.log("\n" + "=".repeat(50));
     if (verificationPassed) {
-      console.log("✅ Migration completed successfully!");
+      console.log("[Success] Migration completed successfully!");
       console.log(`   - Posts migrated: ${posts?.length ?? 0}`);
       console.log(`   - Ratings migrated: ${ratings?.length ?? 0}`);
     } else {
-      console.log("⚠️  Migration completed with warnings");
+      console.log("[Warning] Migration completed with warnings");
       console.log("   Some counters may need manual verification.");
     }
     console.log("=".repeat(50));
 
   } catch (error) {
-    console.error("\n❌ Migration failed with error:", error);
+    console.error("\n[Error] Migration failed:", error);
     process.exit(1);
   }
 }

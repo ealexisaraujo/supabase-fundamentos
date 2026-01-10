@@ -12,15 +12,8 @@
  * @see app/utils/redis/sync.ts for background Supabase sync
  */
 
-import { ensureRedisReady, isRedisConfigured, type UnifiedRedis } from "./client";
+import { ensureRedisReady } from "./client";
 import { supabase } from "../client";
-
-/**
- * Get Redis client (ensures connection is ready)
- */
-async function getRedis(): Promise<UnifiedRedis | null> {
-  return ensureRedisReady();
-}
 
 export interface LikeResult {
   success: boolean;
@@ -66,10 +59,10 @@ export async function toggleLike(
   );
 
   // Get Redis client (supports both Upstash and local Redis)
-  const redis = await getRedis();
+  const redis = await ensureRedisReady();
 
   // Fallback to Supabase if Redis is not available
-  if (!isRedisConfigured || !redis) {
+  if (!redis) {
     console.log("[RedisCounter] Redis not available, falling back to Supabase");
     return toggleLikeViaSupabase(postId, sessionId);
   }
@@ -178,9 +171,9 @@ async function toggleLikeViaSupabase(
  * Falls back to Supabase if Redis unavailable
  */
 export async function getLikeCount(postId: string): Promise<number> {
-  const redis = await getRedis();
+  const redis = await ensureRedisReady();
 
-  if (!isRedisConfigured || !redis) {
+  if (!redis) {
     // Fallback to Supabase
     const { data, error } = await supabase
       .from("posts_new")
@@ -231,9 +224,9 @@ export async function getLikeCounts(
     return countsMap;
   }
 
-  const redis = await getRedis();
+  const redis = await ensureRedisReady();
 
-  if (!isRedisConfigured || !redis) {
+  if (!redis) {
     // Fallback to Supabase
     console.log("[RedisCounter] Using Supabase fallback for batch counts");
     const { data, error } = await supabase
@@ -319,8 +312,8 @@ async function syncMissingCounters(
   postIds: string[],
   countsMap: Map<string, number>
 ): Promise<void> {
-  const redis = await getRedis();
-  if (!isRedisConfigured || !redis) return;
+  const redis = await ensureRedisReady();
+  if (!redis) return;
 
   const { data, error } = await supabase
     .from("posts_new")
@@ -350,9 +343,9 @@ export async function isLikedBySession(
 ): Promise<boolean> {
   if (!sessionId) return false;
 
-  const redis = await getRedis();
+  const redis = await ensureRedisReady();
 
-  if (!isRedisConfigured || !redis) {
+  if (!redis) {
     // Fallback to Supabase
     const { data, error } = await supabase
       .from("post_ratings")
@@ -393,9 +386,9 @@ export async function getLikedStatuses(
     return likedMap;
   }
 
-  const redis = await getRedis();
+  const redis = await ensureRedisReady();
 
-  if (!isRedisConfigured || !redis) {
+  if (!redis) {
     // Fallback to Supabase
     console.log("[RedisCounter] Using Supabase fallback for batch liked status");
     const { data, error } = await supabase
@@ -475,8 +468,8 @@ export async function syncCounterFromDB(postId: string): Promise<number> {
 
   const count = data?.likes ?? 0;
 
-  const redis = await getRedis();
-  if (isRedisConfigured && redis) {
+  const redis = await ensureRedisReady();
+  if (redis) {
     const key = counterKeys.postLikes(postId);
     await redis.set(key, count);
     console.log(`[RedisCounter] Synced post ${postId}: count=${count}`);
@@ -490,9 +483,9 @@ export async function syncCounterFromDB(postId: string): Promise<number> {
  * This should be run once when Redis is empty
  */
 export async function initializeCountersFromDB(): Promise<void> {
-  const redis = await getRedis();
+  const redis = await ensureRedisReady();
 
-  if (!isRedisConfigured || !redis) {
+  if (!redis) {
     console.log("[RedisCounter] Redis not configured, skipping initialization");
     return;
   }
