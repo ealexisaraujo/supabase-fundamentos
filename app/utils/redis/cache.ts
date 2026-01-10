@@ -239,20 +239,15 @@ export async function invalidateCache(pattern: string): Promise<void> {
   const startTime = Date.now();
 
   try {
-    // Use SCAN to find matching keys
-    let cursor: number = 0;
+    // Use KEYS for local Redis (simpler than SCAN for small datasets)
+    const keys = await redis.keys(pattern);
     let deletedCount = 0;
 
-    do {
-      const result = await redis.scan(cursor, { match: pattern, count: 100 });
-      cursor = typeof result[0] === "string" ? parseInt(result[0], 10) : result[0];
-      const keys = result[1];
-
-      if (keys.length > 0) {
-        await redis.del(...keys);
-        deletedCount += keys.length;
-      }
-    } while (cursor !== 0);
+    // Delete keys one by one (UnifiedRedis.del takes single key)
+    for (const key of keys) {
+      await redis.del(key);
+      deletedCount++;
+    }
 
     const duration = Date.now() - startTime;
     console.log(
@@ -310,8 +305,10 @@ export async function invalidateCacheByTag(tag: string): Promise<void> {
     const keys = await redis.smembers(tag);
 
     if (keys.length > 0) {
-      // Delete all keys
-      await redis.del(...keys);
+      // Delete keys one by one (UnifiedRedis.del takes single key)
+      for (const key of keys) {
+        await redis.del(key);
+      }
       // Clear the tag set
       await redis.del(tag);
     }
