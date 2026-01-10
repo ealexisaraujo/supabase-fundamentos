@@ -66,8 +66,8 @@ export async function fetchCachedPostsPage(
   // Layer 1: Try Redis first
   const cachedPosts = await getFromCache<Post[]>(cacheKey);
 
-  if (cachedPosts !== null) {
-    // Cache HIT - return cached data
+  // Cache HIT - return cached data (but treat empty arrays as cache miss)
+  if (cachedPosts !== null && cachedPosts.length > 0) {
     const hasMore = cachedPosts.length === limit;
     return {
       posts: cachedPosts,
@@ -110,11 +110,13 @@ export async function fetchCachedPostsPage(
 
   const posts = transformSupabasePosts((data || []) as SupabasePostRaw[]);
 
-  // Store in Redis for next time
-  await setInCache(cacheKey, posts, cacheTTL.HOME_POSTS, [
-    cacheTags.POSTS,
-    cacheTags.HOME,
-  ]);
+  // Only cache if we have posts (don't cache empty results - they might be temporary)
+  if (posts.length > 0) {
+    await setInCache(cacheKey, posts, cacheTTL.HOME_POSTS, [
+      cacheTags.POSTS,
+      cacheTags.HOME,
+    ]);
+  }
 
   const hasMore = posts.length === limit;
   return {
