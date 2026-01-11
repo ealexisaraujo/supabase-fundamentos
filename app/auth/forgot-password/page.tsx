@@ -2,15 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { supabase } from "@/app/utils/client";
 import { BackIcon } from "@/app/components/icons";
 import { Button } from "@/app/components/Button";
 
-export default function LoginPage() {
-  const router = useRouter();
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -20,25 +17,21 @@ export default function LoginPage() {
     setMessage(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
       });
 
       if (error) throw error;
 
-      setMessage({ type: "success", text: "Inicio de sesion exitoso!" });
-
-      // Redirect to home after a short delay
-      setTimeout(() => {
-        router.push("/");
-        router.refresh();
-      }, 1500);
-
+      setMessage({
+        type: "success",
+        text: "Revisa tu correo electronico. Te hemos enviado un enlace para restablecer tu contrasena."
+      });
+      setEmail("");
     } catch (error) {
       setMessage({
         type: "error",
-        text: error instanceof Error ? error.message : "Error al iniciar sesion",
+        text: error instanceof Error ? error.message : "Error al enviar el correo",
       });
     } finally {
       setIsLoading(false);
@@ -52,7 +45,7 @@ export default function LoginPage() {
         <Button
           variant="accent"
           size="sm"
-          href="/"
+          href="/auth/login"
           leftIcon={<BackIcon className="w-4 h-4" />}
         >
           Volver
@@ -65,8 +58,13 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Suplatzigram
           </h1>
-          <p className="text-foreground/60 mt-2">Inicia sesion en tu cuenta</p>
+          <p className="text-foreground/60 mt-2">Recupera tu contrasena</p>
         </div>
+
+        {/* Description */}
+        <p className="text-foreground/70 text-sm text-center mb-6">
+          Ingresa tu correo electronico y te enviaremos un enlace para restablecer tu contrasena.
+        </p>
 
         {/* Formulario */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -75,15 +73,6 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Correo electronico"
-            required
-            className="w-full px-4 py-3 rounded-xl bg-card-bg border border-border text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
-
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Contrasena"
             required
             className="w-full px-4 py-3 rounded-xl bg-card-bg border border-border text-foreground placeholder:text-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
@@ -108,22 +97,15 @@ export default function LoginPage() {
             fullWidth
             disabled={isLoading}
           >
-            {isLoading ? "Iniciando sesion..." : "Iniciar sesion"}
+            {isLoading ? "Enviando..." : "Enviar enlace"}
           </Button>
-
-          {/* Link a olvidaste tu contrasena */}
-          <div className="text-center">
-            <Link href="/auth/forgot-password" className="text-sm text-foreground/60 hover:text-primary">
-              Olvidaste tu contrasena?
-            </Link>
-          </div>
         </form>
 
-        {/* Link a registro */}
+        {/* Link a login */}
         <p className="text-center text-foreground/60 mt-6">
-          No tienes cuenta?{" "}
-          <Link href="/auth/register" className="text-primary hover:underline">
-            Registrate
+          Recordaste tu contrasena?{" "}
+          <Link href="/auth/login" className="text-primary hover:underline">
+            Inicia sesion
           </Link>
         </p>
       </div>
