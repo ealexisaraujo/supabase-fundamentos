@@ -133,11 +133,14 @@ text
 # Like count per post (String with atomic INCR/DECR)
 post:likes:{postId} = "447"
 
-# Set of session IDs that liked a post
-post:liked:{postId} = Set<sessionId>
+# Set of identifiers that liked a post (prefixed with session: or profile:)
+post:liked:{postId} = Set<"session:{sessionId}" | "profile:{profileId}">
 
-# Set of post IDs liked by a session (for batch queries)
+# Set of post IDs liked by a session (anonymous users)
 session:likes:{sessionId} = Set<postId>
+
+# Set of post IDs liked by a profile (authenticated users)
+profile:likes:{profileId} = Set<postId>
 
 
 ### Example Redis Commands
@@ -147,23 +150,41 @@ redis
 GET post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
 > "447"
 
-# Check if session liked
-SISMEMBER post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 session-abc123
+# Check if anonymous session liked
+SISMEMBER post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 "session:session-abc123"
 > 1
 
-# Get all posts liked by session
+# Check if authenticated profile liked
+SISMEMBER post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 "profile:fc799006-9731-43db-ab47-1bc34180d88a"
+> 1
+
+# Get all posts liked by session (anonymous)
 SMEMBERS session:likes:session-abc123
 > ["post-id-1", "post-id-2", ...]
 
-# Atomic like (in toggleLike function)
+# Get all posts liked by profile (authenticated)
+SMEMBERS profile:likes:fc799006-9731-43db-ab47-1bc34180d88a
+> ["post-id-1", "post-id-2", ...]
+
+# Atomic like - anonymous user
 INCR post:likes:{postId}
-SADD post:liked:{postId} {sessionId}
+SADD post:liked:{postId} "session:{sessionId}"
 SADD session:likes:{sessionId} {postId}
 
-# Atomic unlike
+# Atomic like - authenticated user
+INCR post:likes:{postId}
+SADD post:liked:{postId} "profile:{profileId}"
+SADD profile:likes:{profileId} {postId}
+
+# Atomic unlike - anonymous user
 DECR post:likes:{postId}
-SREM post:liked:{postId} {sessionId}
+SREM post:liked:{postId} "session:{sessionId}"
 SREM session:likes:{sessionId} {postId}
+
+# Atomic unlike - authenticated user
+DECR post:likes:{postId}
+SREM post:liked:{postId} "profile:{profileId}"
+SREM profile:likes:{profileId} {postId}
 
 
 ---
@@ -211,13 +232,20 @@ export const counterKeys = {
   postLikes: (postId: string) => `post:likes:${postId}`,
   postLiked: (postId: string) => `post:liked:${postId}`,
   sessionLikes: (sessionId: string) => `session:likes:${sessionId}`,
+  profileLikes: (profileId: string) => `profile:likes:${profileId}`,
 };
+
+// Identity helper - generates prefixed identifier
+export function getLikeIdentifier(sessionId: string, profileId?: string): string {
+  return profileId ? `profile:${profileId}` : `session:${sessionId}`;
+}
 
 /**
  * Toggle like for a post (atomic operation)
  * Returns new count and liked status
+ * @param profileId - Optional: for authenticated users, uses profile for persistent likes
  */
-export async function toggleLike(postId: string, sessionId: string): Promise<LikeResult>
+export async function toggleLike(postId: string, sessionId: string, profileId?: string): Promise<LikeResult>
 
 /**
  * Get like count for a single post
@@ -232,14 +260,15 @@ export async function getLikeCount(postId: string): Promise<number>
 export async function getLikeCounts(postIds: string[]): Promise<Map<string, number>>
 
 /**
- * Check if session liked a post
+ * Check if user liked a post (supports both session and profile)
  */
-export async function isLikedBySession(postId: string, sessionId: string): Promise<boolean>
+export async function isLikedBySession(postId: string, sessionId: string, profileId?: string): Promise<boolean>
 
 /**
  * Get liked status for multiple posts (batch)
+ * Checks profile likes first if profileId provided, falls back to session
  */
-export async function getLikedStatuses(postIds: string[], sessionId: string): Promise<Map<string, boolean>>
+export async function getLikedStatuses(postIds: string[], sessionId: string, profileId?: string): Promise<Map<string, boolean>>
 
 /**
  * Sync a single counter from Supabase to Redis (for recovery)
@@ -315,38 +344,78 @@ export async function syncLikeToSupabase(
   postId: string,
   sessionId: string,
   isLike: boolean,
-  newCount: number
+  newCount: number,
+  profileId?: string  // For authenticated users - stores with profile_id
 ): Promise<void> {
-  console.log(`[RedisSync] Starting sync: post=${postId}, isLike=${isLike}, count=${newCount}`);
+  const identifierType = profileId ? 'profile' : 'session';
+  console.log(`[RedisSync] Starting sync: post=${postId}, ${identifierType}=${profileId || sessionId}, isLike=${isLike}, count=${newCount}`);
 
   try {
     // Step 1: Update post_ratings table (the rating record)
     if (isLike) {
-      // INSERT rating - use upsert to handle race conditions
-      const { error: ratingError } = await supabase
-        .from("post_ratings")
-        .upsert(
-          {
-            post_id: postId,
-            session_id: sessionId,
-            created_at: new Date().toISOString(),
-          },
-          { onConflict: "post_id,session_id" }
-        );
+      if (profileId) {
+        // Authenticated user: store with profile_id (check-then-insert to avoid constraint errors)
+        const { data: existing } = await supabase
+          .from("post_ratings")
+          .select("id")
+          .eq("post_id", postId)
+          .eq("profile_id", profileId)
+          .maybeSingle();
 
-      if (ratingError) {
-        console.error("[RedisSync] Failed to insert rating:", ratingError);
+        if (!existing) {
+          const { error: ratingError } = await supabase
+            .from("post_ratings")
+            .insert({
+              post_id: postId,
+              profile_id: profileId,
+              session_id: null,
+              created_at: new Date().toISOString(),
+            });
+
+          if (ratingError && ratingError.code !== "23505") {
+            console.error("[RedisSync] Failed to insert profile rating:", ratingError);
+          }
+        }
+      } else {
+        // Anonymous user: store with session_id (original behavior)
+        const { error: ratingError } = await supabase
+          .from("post_ratings")
+          .upsert(
+            {
+              post_id: postId,
+              session_id: sessionId,
+              profile_id: null,
+              created_at: new Date().toISOString(),
+            },
+            { onConflict: "post_id,session_id" }
+          );
+
+        if (ratingError) {
+          console.error("[RedisSync] Failed to insert session rating:", ratingError);
+        }
       }
     } else {
-      // DELETE rating
-      const { error: ratingError } = await supabase
-        .from("post_ratings")
-        .delete()
-        .eq("post_id", postId)
-        .eq("session_id", sessionId);
+      // DELETE rating - based on auth status
+      if (profileId) {
+        const { error: ratingError } = await supabase
+          .from("post_ratings")
+          .delete()
+          .eq("post_id", postId)
+          .eq("profile_id", profileId);
 
-      if (ratingError) {
-        console.error("[RedisSync] Failed to delete rating:", ratingError);
+        if (ratingError) {
+          console.error("[RedisSync] Failed to delete profile rating:", ratingError);
+        }
+      } else {
+        const { error: ratingError } = await supabase
+          .from("post_ratings")
+          .delete()
+          .eq("post_id", postId)
+          .eq("session_id", sessionId);
+
+        if (ratingError) {
+          console.error("[RedisSync] Failed to delete session rating:", ratingError);
+        }
       }
     }
 

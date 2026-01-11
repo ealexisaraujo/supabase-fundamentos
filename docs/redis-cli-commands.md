@@ -168,41 +168,47 @@ GET post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
 # Example output: "446"
 ```
 
-### View Who Liked a Post (Set of Session IDs)
+### View Who Liked a Post (Set of Identifiers)
 
 ```bash
-# Get all session IDs that liked a post
+# Get all identifiers that liked a post (mix of session and profile)
 SMEMBERS post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001
 
-# Example output:
-# 1) "mk1meny8xyz123"
-# 2) "abc123def456"
+# Example output (shows both anonymous and authenticated likes):
+# 1) "session:mk1meny8xyz123"
+# 2) "profile:fc799006-9731-43db-ab47-1bc34180d88a"
 ```
 
-### Check if a Session Liked a Post
+### Check if a User Liked a Post
 
 ```bash
-# Check if session is in the liked set (returns 1 if yes, 0 if no)
-SISMEMBER post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 mk1meny8xyz123
+# Check if anonymous session is in the liked set
+SISMEMBER post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 "session:mk1meny8xyz123"
+
+# Check if authenticated profile is in the liked set
+SISMEMBER post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 "profile:fc799006-9731-43db-ab47-1bc34180d88a"
 
 # Example output: (integer) 1
 ```
 
-### View All Posts Liked by a Session
+### View All Posts Liked by a User
 
 ```bash
-# Get all post IDs that a session has liked
+# Get all post IDs that an anonymous session has liked
 SMEMBERS session:likes:mk1meny8xyz123
+
+# Get all post IDs that an authenticated profile has liked
+SMEMBERS profile:likes:fc799006-9731-43db-ab47-1bc34180d88a
 
 # Example output:
 # 1) "50050001-aaaa-bbbb-cccc-ddddeeee0001"
 # 2) "50050001-aaaa-bbbb-cccc-ddddeeee0002"
 ```
 
-### Count How Many Sessions Liked a Post
+### Count How Many Users Liked a Post
 
 ```bash
-# Get the count of unique sessions that liked a post
+# Get the count of unique identifiers that liked a post (sessions + profiles)
 SCARD post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001
 
 # Example output: (integer) 446
@@ -217,8 +223,11 @@ KEYS post:likes:*
 # List all post liked sets
 KEYS post:liked:*
 
-# List all session likes sets
+# List all session likes sets (anonymous users)
 KEYS session:likes:*
+
+# List all profile likes sets (authenticated users)
+KEYS profile:likes:*
 ```
 
 ### Verify Counter Consistency
@@ -243,11 +252,17 @@ INCR post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
 # Decrement counter by 1
 DECR post:likes:50050001-aaaa-bbbb-cccc-ddddeeee0001
 
-# Add a session to liked set
-SADD post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 session123
+# Add an anonymous session to liked set
+SADD post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 "session:session123"
+
+# Add an authenticated profile to liked set
+SADD post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 "profile:fc799006-9731-43db-ab47-1bc34180d88a"
 
 # Remove a session from liked set
-SREM post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 session123
+SREM post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 "session:session123"
+
+# Remove a profile from liked set
+SREM post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001 "profile:fc799006-9731-43db-ab47-1bc34180d88a"
 ```
 
 ### Delete Counter Data (Dangerous)
@@ -263,6 +278,7 @@ DEL post:liked:50050001-aaaa-bbbb-cccc-ddddeeee0001
 redis-cli --tls -u "redis://default:TOKEN@host:6379" --scan --pattern 'post:likes:*' | xargs -L 1 redis-cli --tls -u "redis://default:TOKEN@host:6379" DEL
 redis-cli --tls -u "redis://default:TOKEN@host:6379" --scan --pattern 'post:liked:*' | xargs -L 1 redis-cli --tls -u "redis://default:TOKEN@host:6379" DEL
 redis-cli --tls -u "redis://default:TOKEN@host:6379" --scan --pattern 'session:likes:*' | xargs -L 1 redis-cli --tls -u "redis://default:TOKEN@host:6379" DEL
+redis-cli --tls -u "redis://default:TOKEN@host:6379" --scan --pattern 'profile:likes:*' | xargs -L 1 redis-cli --tls -u "redis://default:TOKEN@host:6379" DEL
 ```
 
 ## Cache Key Reference
@@ -282,8 +298,9 @@ redis-cli --tls -u "redis://default:TOKEN@host:6379" --scan --pattern 'session:l
 | Key Pattern | Type | Description | TTL |
 |-------------|------|-------------|-----|
 | `post:likes:{postId}` | String (integer) | Like count for a post | No TTL |
-| `post:liked:{postId}` | Set | Session IDs that liked the post | No TTL |
-| `session:likes:{sessionId}` | Set | Post IDs liked by a session | No TTL |
+| `post:liked:{postId}` | Set | Identifiers that liked the post (`session:*` or `profile:*`) | No TTL |
+| `session:likes:{sessionId}` | Set | Post IDs liked by anonymous session | No TTL |
+| `profile:likes:{profileId}` | Set | Post IDs liked by authenticated profile | No TTL |
 
 ## Troubleshooting
 

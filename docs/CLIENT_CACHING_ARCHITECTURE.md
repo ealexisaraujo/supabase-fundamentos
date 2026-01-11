@@ -74,6 +74,22 @@ const queryClient = new QueryClient({
 - Single `onAuthStateChange` listener at app root
 - Shares auth state via React Context
 - No more `getUser()` calls in every component
+- Provides `profileId` for authenticated users (used for persistent likes)
+- Provides `profile` data (username, avatar_url) for display
+
+**Context Shape:**
+```typescript
+interface AuthContextType {
+  user: User | null;
+  session: Session | null;
+  profileId: string | undefined;  // For persistent likes
+  profile: ProfileData | null;    // For display (username, avatar)
+  isLoading: boolean;
+  sessionId: string;              // For anonymous likes
+  signOut: () => Promise<void>;
+  refreshSession: () => Promise<void>;
+}
+```
 
 ### 3. Query Keys Structure
 
@@ -83,10 +99,15 @@ export const queryKeys = {
   posts: {
     all: ['posts'] as const,
     liked: (sessionId: string) => ['posts', 'liked', sessionId] as const,
+    counts: (sessionId: string) => ['posts', 'counts', sessionId] as const,
     home: (sessionId: string) => ['posts', 'home', sessionId] as const,
     ranked: (sessionId: string) => ['posts', 'ranked', sessionId] as const,
   },
 };
+
+// IMPORTANT: When using profile-based likes, include profileId in the query key
+// to ensure cache invalidation works correctly when switching users:
+queryKey: [...queryKeys.posts.liked(sessionId), posts.length, profileId]
 ```
 
 ### 4. Derived State with useMemo (Best Practice)
@@ -208,6 +229,9 @@ If issues arise, revert to previous implementation by:
 | 2026-01-08 | Changed `refetchOnMount` to `true` in QueryProvider | ✅ Complete |
 | 2026-01-08 | Refactored to use `useMemo` for derived state (best practice) | ✅ Complete |
 | 2026-01-08 | Added profile cache invalidation when likes change | ✅ Complete |
+| 2026-01-10 | Added dual identity system (sessionId + profileId) | ✅ Complete |
+| 2026-01-10 | AuthProvider now provides `profileId` and `profile` data | ✅ Complete |
+| 2026-01-10 | Query keys now include `profileId` for proper cache invalidation | ✅ Complete |
 
 ## Files Created/Modified
 

@@ -80,8 +80,8 @@ Posts can be created by authenticated users and are associated with their profil
 ```
 
 **User Flow:**
-- Anonymous users: Can view posts/profiles, can like (via session_id), cannot create posts
-- Authenticated users: Full access, posts are associated with their profile
+- Anonymous users: Can view posts/profiles, can like (via `session_id` - browser-bound), cannot create posts
+- Authenticated users: Full access, posts associated with profile, likes persist via `profile_id` (across devices)
 - Profile wall: User's posts appear on their profile page (`/profile/[username]`)
 
 **Protected Routes:**
@@ -136,9 +136,25 @@ Request → Redis (distributed) → unstable_cache (per-instance) → Supabase (
 ### Data Flow Pattern
 The app uses a mock/production toggle via `NEXT_PUBLIC_USE_MOCKS` env var. Utility functions in `app/utils/` check this flag and return mock data or query Supabase.
 
-### Session Management
-- **Anonymous:** localStorage `session-id` key for tracking likes without auth
-- **Authenticated:** Supabase auth with `AuthProvider` context for centralized state
+### Session Management & Dual Identity System
+
+The app uses a dual identity system for tracking likes:
+
+| User Type | Identifier | Storage | Persistence |
+|-----------|------------|---------|-------------|
+| Anonymous | `session_id` | localStorage | Browser-bound (lost if cleared) |
+| Authenticated | `profile_id` | Supabase profiles | Persistent across devices/browsers |
+
+**Redis Key Patterns:**
+- Anonymous likes: `session:likes:{sessionId}` and `post:liked:{postId}` contains `session:{sessionId}`
+- Authenticated likes: `profile:likes:{profileId}` and `post:liked:{postId}` contains `profile:{profileId}`
+
+**AuthProvider Context:** Centralized auth state with:
+- `user` - Supabase User object
+- `session` - Supabase Session object
+- `sessionId` - Browser session ID for anonymous users
+- `profileId` - Profile UUID for authenticated users (used for persistent likes)
+- `profile` - Profile data (username, avatar_url) for display
 
 ## Environment Variables
 
@@ -181,6 +197,7 @@ npx vitest run tests/comments.test.ts
 - Next.js `unstable_cache` for server-side data caching
 
 ## Recent Changes
+- 009-dual-identity-likes: Implemented dual identity system for likes. Anonymous users use `session_id` (browser-bound), authenticated users use `profile_id` (persistent across devices). Updated Redis key schema to use prefixed identifiers (`session:{id}` vs `profile:{id}`). AuthProvider now exposes `profileId` and `profile` data. Updated `post_ratings` table with `profile_id` column and partial unique index.
 - 008-comment-count-caching: Fixed comment count flashing from 0 to actual count during navigation. Added `comments_count` to Post interface. Updated `cached-posts.ts` and `posts.ts` to include `comments(count)` in Supabase queries. PostCard now passes `initialCommentCount` to CommentsSection. Comment counts now come from server cache instead of client-side fetch.
 - 007-authenticated-comments: Implemented authenticated comments with profile linking. Added `profile_id` FK to comments table. Updated RLS policy to require authentication for INSERT. Comments now display username with link to profile. Anonymous users see "Login to add a comment" prompt. Made `username` nullable in profiles to support registration flow where users set username after signup.
 - 006-cache-sync-fix: Fixed liked status not persisting across page navigation. Changed `refetchOnMount: true` in QueryProvider to ensure stale data refetches on mount. Refactored HomeFeed and RankGrid to use `useMemo` for derived state (TanStack Query best practice). Added profile cache invalidation to `revalidatePostsCache()` since profile pages cache posts with like counts.

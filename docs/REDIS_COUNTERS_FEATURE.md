@@ -50,14 +50,23 @@ User clicks Like
 | Key Pattern | Type | Description |
 |-------------|------|-------------|
 | `post:likes:{postId}` | String | Like count (integer stored as string) |
-| `post:liked:{postId}` | Set | Session IDs that liked this post |
-| `session:likes:{sessionId}` | Set | Post IDs liked by this session |
+| `post:liked:{postId}` | Set | Identifiers that liked this post (`session:{id}` or `profile:{id}`) |
+| `session:likes:{sessionId}` | Set | Post IDs liked by this session (anonymous users) |
+| `profile:likes:{profileId}` | Set | Post IDs liked by this profile (authenticated users) |
 
-### Why Three Keys?
+### Dual Identity System
+
+The system supports two types of identifiers:
+
+- **Anonymous users**: `session:{sessionId}` - browser-bound, lost when localStorage is cleared
+- **Authenticated users**: `profile:{profileId}` - persistent, works across devices/browsers
+
+### Why Four Keys?
 
 1. **`post:likes:{postId}`** - O(1) counter reads for display
-2. **`post:liked:{postId}`** - O(1) check if session liked a post
-3. **`session:likes:{sessionId}`** - O(1) batch check for multiple posts
+2. **`post:liked:{postId}`** - O(1) check if user liked a post (stores prefixed identifiers)
+3. **`session:likes:{sessionId}`** - O(1) batch check for anonymous users
+4. **`profile:likes:{profileId}`** - O(1) batch check for authenticated users
 
 ## Implementation Files
 
@@ -67,13 +76,15 @@ User clicks Like
 
 | Function | Description |
 |----------|-------------|
-| `toggleLike(postId, sessionId)` | Atomic like/unlike with INCR/DECR and SADD/SREM |
+| `toggleLike(postId, sessionId, profileId?)` | Atomic like/unlike with INCR/DECR and SADD/SREM |
 | `getLikeCount(postId)` | Get single post count |
 | `getLikeCounts(postIds)` | Batch get counts for multiple posts |
-| `isLikedBySession(postId, sessionId)` | Check if session liked a post |
-| `getLikedStatuses(postIds, sessionId)` | Batch check liked status |
+| `isLikedBySession(postId, sessionId, profileId?)` | Check if user liked a post |
+| `getLikedStatuses(postIds, sessionId, profileId?)` | Batch check liked status |
 | `syncCounterFromDB(postId)` | Initialize counter from Supabase |
 | `initializeCountersFromDB(postIds)` | Batch initialize from Supabase |
+
+**Note:** When `profileId` is provided (authenticated user), likes are stored with `profile:{profileId}` identifier. Otherwise, uses `session:{sessionId}`.
 
 **Key Features:**
 - Atomic operations using Redis INCR/DECR
@@ -86,9 +97,10 @@ User clicks Like
 
 | Function | Description |
 |----------|-------------|
-| `syncLikeToSupabase(postId, sessionId, isLiked, count)` | Sync single like operation |
+| `syncLikeToSupabase(postId, sessionId, isLiked, count, profileId?)` | Sync single like operation |
 | `reconcileCounter(postId)` | Compare Redis vs Supabase, fix drift |
-| `reconcileAllCounters()` | Reconcile all posts (scheduled job) |
+| `reconcileAllCounters()` | Reconcile all posts and liked sets |
+| `migrateSessionLikesToProfile(sessionId, profileId)` | Migrate session likes to profile on login |
 
 **Key Features:**
 - Fire-and-forget (doesn't block UI)
@@ -135,13 +147,14 @@ function fetchCountsFromRedis(
 import { toggleLike } from "@/app/utils/redis/counters";
 import { syncLikeToSupabase } from "@/app/utils/redis/sync";
 
-const result = await toggleLike(postId, sessionId);
+// For authenticated users, pass profileId
+const result = await toggleLike(postId, sessionId, profileId);
 
 if (result.success) {
   console.log(`New count: ${result.newCount}, isLiked: ${result.isLiked}`);
 
-  // Background sync to Supabase
-  syncLikeToSupabase(postId, sessionId, result.isLiked, result.newCount);
+  // Background sync to Supabase (includes profileId for authenticated users)
+  syncLikeToSupabase(postId, sessionId, result.isLiked, result.newCount, profileId);
 }
 ```
 
@@ -151,20 +164,23 @@ if (result.success) {
 import { fetchCountsFromRedis } from "@/app/utils/posts-with-counts";
 
 const postIds = ["uuid-1", "uuid-2", "uuid-3"];
-const { countsMap, likedMap } = await fetchCountsFromRedis(postIds, sessionId);
+// Pass profileId for authenticated users to check profile-based likes
+const { countsMap, likedMap } = await fetchCountsFromRedis(postIds, sessionId, profileId);
 
 // countsMap.get("uuid-1") => 446
-// likedMap.get("uuid-1") => true
+// likedMap.get("uuid-1") => true (checks profile likes if profileId provided)
 ```
 
 ### Using in TanStack Query
 
 ```typescript
+const { user, profileId, sessionId } = useAuth();
+
 const { data: redisData } = useQuery({
-  queryKey: queryKeys.posts.ranked(sessionId),
+  queryKey: [...queryKeys.posts.ranked(sessionId), profileId],
   queryFn: async () => {
     const postIds = posts.map(p => String(p.id));
-    return fetchCountsFromRedis(postIds, sessionId);
+    return fetchCountsFromRedis(postIds, sessionId, profileId);
   },
   staleTime: 30 * 1000,
   refetchOnMount: true,

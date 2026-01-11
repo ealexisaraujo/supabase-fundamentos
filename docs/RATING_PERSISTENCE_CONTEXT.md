@@ -10,15 +10,24 @@ Previously, when users clicked "like" on the homepage, the rating was only store
 
 ## Solution Architecture
 
-### Session-Based Rating System
+### Dual Identity Rating System
 
-Since the application doesn't have user authentication, we implemented a session-based approach:
+The application supports both anonymous and authenticated users with a dual identity system:
 
+**For Anonymous Users:**
 1. **Session Identification**: Each browser session gets a unique session ID stored in `localStorage`
 2. **One Rating Per Session**: Database constraints enforce that each session can only like a post once
-3. **Toggle Behavior**: Clicking the heart toggles between liked/unliked states
-4. **Optimistic Updates**: UI updates immediately while the database operation happens in the background
-5. **Real-time Sync**: Supabase's pub/sub system broadcasts like count changes to all connected clients
+3. **Browser-Bound**: Likes are lost if browser data is cleared
+
+**For Authenticated Users:**
+1. **Profile Identification**: Uses `profile_id` from the profiles table
+2. **One Rating Per Profile**: Database constraints enforce one like per profile per post
+3. **Persistent**: Likes persist across devices and browsers
+
+**Common Features:**
+1. **Toggle Behavior**: Clicking the heart toggles between liked/unliked states
+2. **Optimistic Updates**: UI updates immediately while the database operation happens in the background
+3. **Real-time Sync**: Supabase's pub/sub system broadcasts like count changes to all connected clients
 
 ## Technical Decisions
 
@@ -38,10 +47,16 @@ We chose Supabase's real-time features with a pub/sub approach for several reaso
 
 ### Single Row Per User-Item Pair
 
-Instead of inserting multiple rating rows, we maintain exactly one row per (post_id, session_id) pair:
+Instead of inserting multiple rating rows, we maintain exactly one row per (post_id, identifier) pair:
 
+**For session-based likes:**
 ```sql
 CONSTRAINT unique_session_post_rating UNIQUE (post_id, session_id)
+```
+
+**For profile-based likes:**
+```sql
+CREATE UNIQUE INDEX idx_post_ratings_profile ON post_ratings(post_id, profile_id) WHERE profile_id IS NOT NULL;
 ```
 
 This approach:
@@ -49,6 +64,7 @@ This approach:
 - Makes "unlike" a simple DELETE operation
 - Prevents duplicate ratings at the database level (most reliable method)
 - Enables efficient queries with proper indexing
+- Allows authenticated users' likes to persist across devices
 
 ## Files Created/Modified
 
@@ -113,11 +129,21 @@ Updated ranking page:
 CREATE TABLE public.post_ratings (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     post_id uuid NOT NULL REFERENCES public.posts_new(id) ON DELETE CASCADE,
-    session_id text NOT NULL,
+    session_id text,  -- For anonymous users (nullable)
+    profile_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,  -- For authenticated users
     created_at timestamp with time zone DEFAULT now(),
-    CONSTRAINT unique_session_post_rating UNIQUE (post_id, session_id)
+    CONSTRAINT unique_session_post_rating UNIQUE (post_id, session_id),
+    CONSTRAINT check_identity CHECK (session_id IS NOT NULL OR profile_id IS NOT NULL)
 );
+
+-- Unique index for profile-based likes (partial index)
+CREATE UNIQUE INDEX idx_post_ratings_profile ON post_ratings(post_id, profile_id) WHERE profile_id IS NOT NULL;
 ```
+
+**Identity Strategy:**
+- Anonymous users: `session_id` is set, `profile_id` is NULL
+- Authenticated users: `profile_id` is set, `session_id` is NULL
+- The CHECK constraint ensures at least one identifier is always present
 
 ## Data Flow
 
@@ -212,18 +238,22 @@ supabase migration up
 - **Offline Handling**: If connection is lost, optimistic updates still work and will sync when reconnected
 - **Bandwidth**: Only changed data is transmitted, not full table refreshes
 
-### Why Session-Based Approach is Still Necessary
+### Dual Identity Approach
 
-Even with real-time updates, the session-based approach is essential because:
+The system uses two identity mechanisms depending on authentication status:
 
-1. **Identity**: Sessions identify *who* liked what - without this, we can't enforce "one like per user"
-2. **Real-time**: Real-time broadcasts *what* changed to everyone - it's about synchronization, not identity
-3. **Complementary**: Sessions + Real-time work together - sessions for enforcement, real-time for sync
+1. **Anonymous Users (session_id)**: Browser-bound identity stored in localStorage
+2. **Authenticated Users (profile_id)**: Persistent identity from the profiles table
 
 ```
-Session ID → Identifies the user (enforces one like per user)
-Real-time  → Broadcasts changes (syncs all clients)
+Anonymous:    session_id  → Browser-bound (lost if localStorage cleared)
+Authenticated: profile_id → Persistent (works across devices/browsers)
+Real-time:                → Broadcasts changes (syncs all clients)
 ```
+
+**Why not just use session_id for everyone?**
+- Problem: Authenticated users would lose their likes when clearing browser data
+- Solution: Use profile_id for authenticated users so likes persist across devices
 
 ## Code Cleanup
 
@@ -266,10 +296,12 @@ npm run test:run
   - Error handling for missing session
   - Unique constraint enforcement (conceptual)
 
-### Future Improvements
+### Implemented: Dual Identity System (January 2026)
 
-If user authentication is added later:
-1. Migrate from session-based to user-based ratings
-2. Add a `user_id` column to `post_ratings`
-3. Link existing session ratings to user accounts if desired
-4. Use Supabase Auth session tokens instead of custom session IDs
+User authentication has been implemented with a dual identity approach:
+
+1. ✅ Added `profile_id` column to `post_ratings` table
+2. ✅ Session-based likes remain for anonymous users
+3. ✅ Profile-based likes for authenticated users persist across devices
+4. ✅ AuthProvider exposes `profileId` for use in like operations
+5. ✅ Migration available to convert session likes to profile likes on login

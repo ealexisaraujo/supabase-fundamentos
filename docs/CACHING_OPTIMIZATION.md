@@ -128,20 +128,34 @@ function getSupabaseClient() {
 
 The cached post data doesn't include `isLiked` status because:
 
-1. **Liked status is session-specific**: Each user has their own liked posts
-2. **Sessions are stored in localStorage**: Not available on the server
+1. **Liked status is user-specific**: Each user has their own liked posts
+2. **Identity is resolved at runtime**: Anonymous users use `session_id` (localStorage), authenticated users use `profile_id` (persistent)
 3. **Cache would be wrong**: Caching `isLiked` would show one user's likes to everyone
+
+#### Dual Identity System
+
+The app uses a dual identity system for likes:
+
+| User Type | Identifier | Storage | Persistence |
+|-----------|------------|---------|-------------|
+| Anonymous | `session_id` | localStorage | Browser-bound (lost if cleared) |
+| Authenticated | `profile_id` | Supabase profiles | Persistent across devices |
+
+This ensures authenticated users' likes persist across browsers and devices, while anonymous users still get a seamless experience.
 
 **Solution:** Fetch liked status on the client using TanStack Query and derive state with `useMemo`:
 
 ```typescript
 // In HomeFeed.tsx (client component)
+const { sessionId, profileId } = useAuth();
 
 // 1. Fetch liked status with TanStack Query caching
+// Note: profileId is included in queryKey to ensure cache invalidates on user switch
 const { data: likedMap } = useQuery({
-  queryKey: queryKeys.posts.liked(sessionId),
+  queryKey: [...queryKeys.posts.liked(sessionId), posts.length, profileId],
   queryFn: async () => {
-    const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, options);
+    // profileId is passed to check profile-based likes for authenticated users
+    const postsWithLikeStatus = await getPostsWithLikeStatus(sessionId, options, profileId);
     return new Map<string, boolean>(
       postsWithLikeStatus.map(post => [String(post.id), post.isLiked || false])
     );
@@ -554,14 +568,18 @@ Cached data is stored in Next.js's Data Cache:
 
 ## Limitations
 
-### Session-Specific Data
+### User-Specific Data
 
 The cache cannot include user-specific data like:
-- `isLiked` status (varies per session)
+- `isLiked` status (varies per user - uses `session_id` for anonymous, `profile_id` for authenticated)
 - User preferences
 - Authentication state
 
 These are fetched client-side after the cached posts are delivered.
+
+**Identity Resolution:**
+- Anonymous users: `isLiked` checked against `session_id` in Redis/Supabase
+- Authenticated users: `isLiked` checked against `profile_id` (persistent across devices)
 
 ### Real-time Data
 
