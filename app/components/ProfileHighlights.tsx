@@ -120,20 +120,20 @@ export default function ProfileHighlights({
               unoptimized
             />
 
-            {/* Owner: Unpin button on hover */}
+            {/* Owner: Unpin button - always visible on mobile, hover on desktop */}
             {isOwner && onUnpin && (
               <button
                 onClick={(e) => handleUnpin(e, highlight.post_id)}
                 disabled={unpinning === highlight.post_id}
-                className={`absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-500 ${
-                  unpinning === highlight.post_id ? "opacity-100 bg-red-500" : ""
+                className={`absolute top-1 right-1 w-7 h-7 rounded-full bg-black/80 text-white flex items-center justify-center active:bg-red-600 transition-all z-10 ${
+                  unpinning === highlight.post_id ? "bg-red-500" : ""
                 }`}
                 aria-label="Quitar de destacados"
               >
                 {unpinning === highlight.post_id ? (
-                  <span className="animate-spin">...</span>
+                  <span className="animate-spin text-xs">...</span>
                 ) : (
-                  <CloseIcon className="w-3 h-3" />
+                  <CloseIcon className="w-3.5 h-3.5" />
                 )}
               </button>
             )}

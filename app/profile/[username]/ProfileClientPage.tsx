@@ -68,6 +68,7 @@ export default function ProfileClientPage({ initialProfile }: { initialProfile: 
     highlights,
     highlightedPostIds,
     error: highlightsError,
+    canAddMore,
     pinPost,
     unpinPost,
     getAvailablePositions,
@@ -205,6 +206,7 @@ export default function ProfileClientPage({ initialProfile }: { initialProfile: 
             highlightedPostIds={highlightedPostIds}
             onPinPost={isOwner ? pinPost : undefined}
             getAvailablePositions={getAvailablePositions}
+            canAddMore={canAddMore}
           />
         </div>
       </main>

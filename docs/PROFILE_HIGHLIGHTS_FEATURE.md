@@ -398,6 +398,35 @@ revalidateTag(PROFILE_CACHE_TAGS.profileTag(username));
 - Other users should see updated highlights
 - Consistent with existing cache patterns
 
+### 10. Mobile-First Action Buttons
+
+**Decision:** Action buttons (pin/unpin) are always visible on mobile, not hidden behind hover states.
+
+**Implementation:**
+- **Unpin button (X):** Always visible on highlights for the owner
+- **Pin button:** Always visible on non-highlighted posts in the grid for the owner
+- Uses `z-index` to ensure buttons are clickable above the image
+- `active:` states for touch feedback instead of `hover:`
+
+**Rationale:**
+- Hover states don't work on touch devices
+- Users couldn't access pin/unpin functionality on mobile
+- Touch targets are sized appropriately (28px / 1.75rem)
+- Follows mobile-first design principles
+- Desktop users still see the same experience (buttons always visible)
+
+**Before (broken on mobile):**
+```tsx
+// Button only visible on hover - doesn't work on touch
+className="opacity-0 group-hover:opacity-100"
+```
+
+**After (mobile-first):**
+```tsx
+// Button always visible with touch feedback
+className="opacity-100 active:bg-red-600 z-10"
+```
+
 ## Security Considerations
 
 ### 1. Row Level Security

@@ -32,6 +32,8 @@ interface ProfileWallProps {
   onPinPost?: (postId: string, position: HighlightPosition) => Promise<boolean>;
   /** Get available positions for pinning */
   getAvailablePositions?: () => HighlightPosition[];
+  /** Whether more highlights can be added (less than 3) */
+  canAddMore?: boolean;
 }
 
 export default function ProfileWall({
@@ -42,6 +44,7 @@ export default function ProfileWall({
   highlightedPostIds,
   onPinPost,
   getAvailablePositions,
+  canAddMore = true,
 }: ProfileWallProps) {
   // Get sessionId and profileId from centralized provider
   const { sessionId, profileId } = useAuth();
@@ -174,7 +177,7 @@ export default function ProfileWall({
       <div className="grid grid-cols-3 gap-1">
         {postsWithLikedStatus.map((post) => {
           const isHighlighted = highlightedPostIds?.has(post.id) ?? false;
-          const canPin = isOwner && onPinPost && !isHighlighted;
+          const canPin = isOwner && onPinPost && !isHighlighted && canAddMore;
 
           return (
             <div
@@ -205,24 +208,24 @@ export default function ProfileWall({
                 </div>
               )}
 
-              {/* Hover overlay with likes count and pin button */}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+              {/* Likes count - visible on hover (desktop) */}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
                 <div className="flex items-center gap-2 text-white">
                   <HeartIcon filled={post.isLiked} className="w-5 h-5" />
                   <span className="font-semibold">{post.likes}</span>
                 </div>
-
-                {/* Pin button (only for owner, only for non-highlighted posts) */}
-                {canPin && (
-                  <button
-                    onClick={(e) => handlePinClick(e, post.id)}
-                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-amber-500/90 text-white flex items-center justify-center hover:bg-amber-500 transition-colors shadow-lg"
-                    aria-label="Agregar a destacados"
-                  >
-                    <PinIcon className="w-4 h-4" />
-                  </button>
-                )}
               </div>
+
+              {/* Pin button - always visible on mobile for owner */}
+              {canPin && (
+                <button
+                  onClick={(e) => handlePinClick(e, post.id)}
+                  className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-amber-500/90 text-white flex items-center justify-center active:bg-amber-600 transition-all shadow-lg z-10"
+                  aria-label="Agregar a destacados"
+                >
+                  <PinIcon className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           );
         })}
