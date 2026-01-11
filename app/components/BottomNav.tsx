@@ -3,47 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { HomeIcon, PlusIcon, RankIcon, UserIcon } from "./icons";
 import { useAuth } from "../providers";
-import { supabase } from "../utils/client";
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const { user, isLoading: isAuthLoading } = useAuth();
-  const [profile, setProfile] = useState<{ username: string; avatar_url: string | null } | null>(null);
-
-  // Fetch profile when user is available
-  useEffect(() => {
-    async function fetchProfile() {
-      if (!user) {
-        console.log("[BottomNav] No user, clearing profile");
-        setProfile(null);
-        return;
-      }
-
-      console.log("[BottomNav] Fetching profile for user:", user.id, user.email);
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("username, avatar_url")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (error) {
-        console.error("[BottomNav] Error fetching profile:", error);
-      }
-
-      if (data) {
-        console.log("[BottomNav] Profile found:", data);
-        setProfile(data);
-      } else {
-        console.log("[BottomNav] No profile found for user");
-        setProfile(null);
-      }
-    }
-
-    fetchProfile();
-  }, [user]);
+  const { user, profile, isLoading: isAuthLoading } = useAuth();
 
   // Hide navigation on auth pages
   if (pathname?.startsWith("/auth")) {
@@ -110,7 +75,7 @@ export default function BottomNav() {
             }`}>
               <Image
                 src={profile.avatar_url}
-                alt={profile.username}
+                alt={profile.username ?? "Profile"}
                 fill
                 sizes="24px"
                 className="object-cover"
