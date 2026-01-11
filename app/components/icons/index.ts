@@ -12,5 +12,7 @@ export { CheckIcon } from './CheckIcon';
 export { LoadingIcon } from './LoadingIcon';
 export { ErrorIcon } from './ErrorIcon';
 export { GridIcon } from './GridIcon';
+export { StarIcon } from './StarIcon';
+export { PinIcon } from './PinIcon';
 
 

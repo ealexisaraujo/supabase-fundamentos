@@ -42,6 +42,19 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 /**
+ * Simplified highlight data for profile display
+ */
+export interface ProfileHighlight {
+  id: string;
+  profile_id: string;
+  post_id: string;
+  position: 1 | 2 | 3;
+  created_at: string;
+  updated_at: string;
+  post?: ProfilePost;
+}
+
+/**
  * Profile type definition
  */
 export interface Profile {
@@ -56,6 +69,8 @@ export interface Profile {
   // User's posts (populated when fetching with posts)
   posts?: ProfilePost[];
   post_count?: number;
+  // User's highlighted posts (pinned)
+  highlights?: ProfileHighlight[];
 }
 
 /**
@@ -190,10 +205,36 @@ async function fetchProfileWithPosts(
     console.error("[CachedProfiles] Error fetching user posts:", postsError);
   }
 
+  // Fetch user's highlighted posts
+  const { data: highlights, error: highlightsError } = await supabase
+    .from("profile_highlights")
+    .select(`
+      id,
+      profile_id,
+      post_id,
+      position,
+      created_at,
+      updated_at,
+      post:posts_new (
+        id,
+        image_url,
+        caption,
+        likes,
+        created_at
+      )
+    `)
+    .eq("profile_id", profile.id)
+    .order("position", { ascending: true });
+
+  if (highlightsError) {
+    console.error("[CachedProfiles] Error fetching highlights:", highlightsError);
+  }
+
   return {
     ...profile,
     posts: posts || [],
     post_count: posts?.length || 0,
+    highlights: (highlights as unknown as ProfileHighlight[]) || [],
   };
 }
 

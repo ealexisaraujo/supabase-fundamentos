@@ -14,11 +14,13 @@ import { useState } from "react";
 import Image from "next/image";
 import ProfileEditForm from "../../components/ProfileEditForm";
 import ProfileWall from "./ProfileWall";
+import ProfileHighlights from "../../components/ProfileHighlights";
 import { ThemeToggle } from "../../components/ThemeToggle";
 import { UserIcon, BackIcon, CameraIcon, GridIcon } from "../../components/icons";
 import { Button } from "../../components/Button";
 import { shouldSkipImageOptimization } from "../../utils/image";
 import { useAuth } from "../../providers";
+import { useHighlights } from "../../hooks";
 import type { Profile } from "../../utils/cached-profiles";
 
 interface ProfileEditViewProps {
@@ -60,6 +62,27 @@ export default function ProfileClientPage({ initialProfile }: { initialProfile: 
 
   // Determine if current user is the profile owner
   const isOwner = !isAuthLoading && user?.id === profile.id;
+
+  // Highlights management hook
+  const {
+    highlights,
+    highlightedPostIds,
+    error: highlightsError,
+    pinPost,
+    unpinPost,
+    getAvailablePositions,
+  } = useHighlights({
+    profileId: profile.id,
+    username: profile.username,
+    initialHighlights: profile.highlights || [],
+    isOwner,
+  });
+
+  // Handler for like (placeholder - actual implementation is in ProfileWall)
+  const handleLike = (postId: string) => {
+    // This is handled by ProfileWall's useLikeHandler
+    console.log("[ProfileHighlights] Like triggered for post:", postId);
+  };
 
   if (isEditing) {
     return (
@@ -148,6 +171,23 @@ export default function ProfileClientPage({ initialProfile }: { initialProfile: 
 
         {/* User Posts Wall */}
         <div className="border-t border-border pt-6">
+          {/* Highlights section */}
+          <ProfileHighlights
+            highlights={highlights}
+            username={profile.username}
+            avatarUrl={profile.avatar_url}
+            isOwner={isOwner}
+            onUnpin={unpinPost}
+            onLike={handleLike}
+          />
+
+          {/* Highlights error message */}
+          {highlightsError && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm">
+              {highlightsError}
+            </div>
+          )}
+
           {/* Posts header with count */}
           <div className="flex items-center justify-center gap-2 text-foreground/60 mb-6">
             <GridIcon className="w-5 h-5" />
@@ -162,6 +202,9 @@ export default function ProfileClientPage({ initialProfile }: { initialProfile: 
             username={profile.username}
             avatarUrl={profile.avatar_url}
             isOwner={isOwner}
+            highlightedPostIds={highlightedPostIds}
+            onPinPost={isOwner ? pinPost : undefined}
+            getAvailablePositions={getAvailablePositions}
           />
         </div>
       </main>

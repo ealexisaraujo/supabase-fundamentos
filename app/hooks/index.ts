@@ -8,3 +8,4 @@ export { useLikeHandler, type UseLikeHandlerOptions, type UseLikeHandlerReturn }
 export { usePostLikesSubscription, type UsePostLikesSubscriptionOptions } from "./usePostLikesSubscription";
 export { useUsernameValidation } from "./useUsernameValidation";
 export { useScrollRestoration, type UseScrollRestorationOptions } from "./useScrollRestoration";
+export { useHighlights, type UseHighlightsOptions, type UseHighlightsReturn } from "./useHighlights";

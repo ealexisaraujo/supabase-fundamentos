@@ -15,24 +15,40 @@ import { useQuery } from "@tanstack/react-query";
 import type { ProfilePost } from "../../utils/cached-profiles";
 import type { Post } from "../../mocks/posts";
 import { PostModal } from "../../components/PostModal";
-import { HeartIcon, GridIcon, PlusIcon } from "../../components/icons";
+import { HeartIcon, GridIcon, PlusIcon, PinIcon } from "../../components/icons";
 import { queryKeys, useAuth } from "../../providers";
 import { fetchCountsFromRedis } from "../../utils/posts-with-counts";
 import { useLikeHandler, usePostLikesSubscription } from "../../hooks";
+import type { HighlightPosition } from "../../types/highlight";
 
 interface ProfileWallProps {
   posts: ProfilePost[];
   username: string;
   avatarUrl: string | null;
   isOwner: boolean;
+  /** Set of post IDs that are currently highlighted */
+  highlightedPostIds?: Set<string>;
+  /** Handler to pin a post (only for owner) */
+  onPinPost?: (postId: string, position: HighlightPosition) => Promise<boolean>;
+  /** Get available positions for pinning */
+  getAvailablePositions?: () => HighlightPosition[];
 }
 
-export default function ProfileWall({ posts: initialPosts, username, avatarUrl, isOwner }: ProfileWallProps) {
+export default function ProfileWall({
+  posts: initialPosts,
+  username,
+  avatarUrl,
+  isOwner,
+  highlightedPostIds,
+  onPinPost,
+  getAvailablePositions,
+}: ProfileWallProps) {
   // Get sessionId and profileId from centralized provider
   const { sessionId, profileId } = useAuth();
 
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [posts, setPosts] = useState<ProfilePost[]>(initialPosts);
+  const [isPinning, setIsPinning] = useState(false);
 
   // Fetch counts and liked status from Redis
   // Redis is the source of truth for counters, ensuring consistency across views
@@ -138,35 +154,81 @@ export default function ProfileWall({ posts: initialPosts, username, avatarUrl, 
     );
   }
 
+  // Handler for pin button click - auto-assigns first available position (FIFO)
+  const handlePinClick = async (e: React.MouseEvent, postId: string) => {
+    e.stopPropagation();
+    if (!onPinPost || !getAvailablePositions || isPinning) return;
+
+    const availablePositions = getAvailablePositions();
+    if (availablePositions.length === 0) return;
+
+    // Auto-select first available position
+    const position = availablePositions[0];
+    setIsPinning(true);
+    await onPinPost(postId, position);
+    setIsPinning(false);
+  };
+
   return (
     <>
       <div className="grid grid-cols-3 gap-1">
-        {postsWithLikedStatus.map((post) => (
-          <button
-            key={post.id}
-            onClick={() => setSelectedPost(convertToPost(post))}
-            className="aspect-square relative group overflow-hidden bg-card-bg"
-          >
-            <Image
-              src={post.image_url}
-              alt={post.caption || "Post"}
-              fill
-              sizes="(max-width: 500px) 33vw, 166px"
-              className="object-cover"
-              unoptimized
-            />
-            {/* Hover overlay with likes count */}
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-              <div className="flex items-center gap-2 text-white">
-                <HeartIcon filled={post.isLiked} className="w-5 h-5" />
-                <span className="font-semibold">{post.likes}</span>
+        {postsWithLikedStatus.map((post) => {
+          const isHighlighted = highlightedPostIds?.has(post.id) ?? false;
+          const canPin = isOwner && onPinPost && !isHighlighted;
+
+          return (
+            <div
+              key={post.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelectedPost(convertToPost(post))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  setSelectedPost(convertToPost(post));
+                }
+              }}
+              className="aspect-square relative group overflow-hidden bg-card-bg cursor-pointer"
+            >
+              <Image
+                src={post.image_url}
+                alt={post.caption || "Post"}
+                fill
+                sizes="(max-width: 500px) 33vw, 166px"
+                className="object-cover"
+                unoptimized
+              />
+
+              {/* Highlighted badge (always visible if highlighted) */}
+              {isHighlighted && (
+                <div className="absolute top-1 right-1 w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-sm">
+                  <PinIcon filled className="w-3 h-3" />
+                </div>
+              )}
+
+              {/* Hover overlay with likes count and pin button */}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <div className="flex items-center gap-2 text-white">
+                  <HeartIcon filled={post.isLiked} className="w-5 h-5" />
+                  <span className="font-semibold">{post.likes}</span>
+                </div>
+
+                {/* Pin button (only for owner, only for non-highlighted posts) */}
+                {canPin && (
+                  <button
+                    onClick={(e) => handlePinClick(e, post.id)}
+                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-amber-500/90 text-white flex items-center justify-center hover:bg-amber-500 transition-colors shadow-lg"
+                    aria-label="Agregar a destacados"
+                  >
+                    <PinIcon className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
-          </button>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Modal */}
+      {/* Post Modal */}
       {selectedPost && (
         <PostModal
           post={selectedPost}
@@ -174,6 +236,7 @@ export default function ProfileWall({ posts: initialPosts, username, avatarUrl, 
           onLike={handleLike}
         />
       )}
+
     </>
   );
 }
