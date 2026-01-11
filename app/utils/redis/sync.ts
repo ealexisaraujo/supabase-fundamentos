@@ -11,12 +11,17 @@
  * Using SET instead of INCREMENT ensures Supabase always matches Redis.
  * This prevents drift between the two systems.
  *
+ * Identity Strategy:
+ * - For authenticated users (profileId provided): store with profile_id
+ * - For anonymous users: store with session_id
+ * This ensures authenticated users' likes persist across devices.
+ *
  * @see app/utils/redis/counters.ts for the main counter logic
  */
 
 import { supabase } from "../client";
 import { ensureRedisReady, isRedisConfigured } from "./client";
-import { counterKeys } from "./counters";
+import { counterKeys, getLikeIdentifier } from "./counters";
 
 /**
  * Sync a like/unlike to Supabase (fire-and-forget)
@@ -28,45 +33,95 @@ import { counterKeys } from "./counters";
  *
  * CRITICAL: This is fire-and-forget. Never await this in useLikeHandler.
  * Call it like: syncLikeToSupabase(...).catch(console.error)
+ *
+ * @param postId - The post being liked/unliked
+ * @param sessionId - Browser session ID (always required)
+ * @param isLike - true for like, false for unlike
+ * @param newCount - The new like count from Redis
+ * @param profileId - User profile ID (optional, for authenticated users)
  */
 export async function syncLikeToSupabase(
   postId: string,
   sessionId: string,
   isLike: boolean,
-  newCount: number
+  newCount: number,
+  profileId?: string
 ): Promise<void> {
+  const identifierType = profileId ? "profile" : "session";
+  const shortId = profileId ? profileId.slice(0, 8) : sessionId.slice(0, 8);
+
   console.log(
-    `[RedisSync] Starting sync: post=${postId}, isLike=${isLike}, count=${newCount}`
+    `[RedisSync] Starting sync: post=${postId}, ${identifierType}=${shortId}, isLike=${isLike}, count=${newCount}`
   );
 
   try {
     // Step 1: Update post_ratings table (the rating record)
     if (isLike) {
-      // INSERT rating - use upsert to handle race conditions
-      const { error: ratingError } = await supabase
-        .from("post_ratings")
-        .upsert(
-          {
-            post_id: postId,
-            session_id: sessionId,
-            created_at: new Date().toISOString(),
-          },
-          { onConflict: "post_id,session_id" }
-        );
+      if (profileId) {
+        // Authenticated user: store with profile_id (no session_id)
+        // First check if like already exists to avoid unique constraint errors
+        const { data: existingLike } = await supabase
+          .from("post_ratings")
+          .select("id")
+          .eq("post_id", postId)
+          .eq("profile_id", profileId)
+          .maybeSingle();
 
-      if (ratingError) {
-        console.error("[RedisSync] Failed to insert rating:", ratingError);
+        if (!existingLike) {
+          const { error: ratingError } = await supabase
+            .from("post_ratings")
+            .insert({
+              post_id: postId,
+              profile_id: profileId,
+              session_id: null, // Explicitly null for profile-based likes
+              created_at: new Date().toISOString(),
+            });
+
+          if (ratingError && ratingError.code !== "23505") {
+            // 23505 = unique violation, ignore since like already exists
+            console.error("[RedisSync] Failed to insert profile rating:", ratingError);
+          }
+        }
+      } else {
+        // Anonymous user: store with session_id (original behavior)
+        const { error: ratingError } = await supabase
+          .from("post_ratings")
+          .upsert(
+            {
+              post_id: postId,
+              session_id: sessionId,
+              profile_id: null, // Explicitly null for session-based likes
+              created_at: new Date().toISOString(),
+            },
+            { onConflict: "post_id,session_id" }
+          );
+
+        if (ratingError) {
+          console.error("[RedisSync] Failed to insert session rating:", ratingError);
+        }
       }
     } else {
-      // DELETE rating
-      const { error: ratingError } = await supabase
-        .from("post_ratings")
-        .delete()
-        .eq("post_id", postId)
-        .eq("session_id", sessionId);
+      // DELETE rating - based on auth status
+      if (profileId) {
+        const { error: ratingError } = await supabase
+          .from("post_ratings")
+          .delete()
+          .eq("post_id", postId)
+          .eq("profile_id", profileId);
 
-      if (ratingError) {
-        console.error("[RedisSync] Failed to delete rating:", ratingError);
+        if (ratingError) {
+          console.error("[RedisSync] Failed to delete profile rating:", ratingError);
+        }
+      } else {
+        const { error: ratingError } = await supabase
+          .from("post_ratings")
+          .delete()
+          .eq("post_id", postId)
+          .eq("session_id", sessionId);
+
+        if (ratingError) {
+          console.error("[RedisSync] Failed to delete session rating:", ratingError);
+        }
       }
     }
 
@@ -137,6 +192,10 @@ export async function reconcileCounter(postId: string): Promise<void> {
  * Use this for:
  * - Initial migration
  * - Full recovery after Redis data loss
+ *
+ * Handles both session-based and profile-based likes:
+ * - session_id likes → session:{sessionId} identifier
+ * - profile_id likes → profile:{profileId} identifier
  */
 export async function reconcileAllCounters(): Promise<void> {
   console.log("[RedisSync] Starting full reconciliation...");
@@ -166,27 +225,137 @@ export async function reconcileAllCounters(): Promise<void> {
 
     console.log(`[RedisSync] Reconciled ${posts?.length ?? 0} counters`);
 
-    // Get all ratings
+    // Get all ratings (including both session_id and profile_id)
     const { data: ratings, error: ratingsError } = await supabase
       .from("post_ratings")
-      .select("post_id, session_id");
+      .select("post_id, session_id, profile_id");
 
     if (ratingsError) {
       console.error("[RedisSync] Failed to fetch ratings:", ratingsError);
       return;
     }
 
-    // Rebuild liked sets
+    let sessionLikes = 0;
+    let profileLikes = 0;
+
+    // Rebuild liked sets - handle both session and profile identifiers
     for (const rating of ratings ?? []) {
       const likedSetKey = counterKeys.postLiked(rating.post_id);
-      const sessionLikesKey = counterKeys.sessionLikes(rating.session_id);
-      await redis.sadd(likedSetKey, rating.session_id);
-      await redis.sadd(sessionLikesKey, rating.post_id);
+
+      if (rating.profile_id) {
+        // Profile-based like
+        const identifier = `profile:${rating.profile_id}`;
+        const profileLikesKey = counterKeys.profileLikes(rating.profile_id);
+        await redis.sadd(likedSetKey, identifier);
+        await redis.sadd(profileLikesKey, rating.post_id);
+        profileLikes++;
+      } else if (rating.session_id) {
+        // Session-based like
+        const identifier = `session:${rating.session_id}`;
+        const sessionLikesKey = counterKeys.sessionLikes(rating.session_id);
+        await redis.sadd(likedSetKey, identifier);
+        await redis.sadd(sessionLikesKey, rating.post_id);
+        sessionLikes++;
+      }
     }
 
-    console.log(`[RedisSync] Reconciled ${ratings?.length ?? 0} rating sets`);
+    console.log(`[RedisSync] Reconciled ${sessionLikes} session likes, ${profileLikes} profile likes`);
     console.log("[RedisSync] Full reconciliation complete!");
   } catch (error) {
     console.error("[RedisSync] Full reconciliation failed:", error);
+  }
+}
+
+/**
+ * Migrate session likes to profile (called on login)
+ *
+ * When a user logs in, this function:
+ * 1. Finds all session-based likes in Redis
+ * 2. Re-keys them to profile-based identifiers
+ * 3. Updates Supabase to use profile_id instead of session_id
+ *
+ * This ensures that likes made before login are preserved after login.
+ *
+ * @param sessionId - The browser session ID
+ * @param profileId - The user's profile ID
+ */
+export async function migrateSessionLikesToProfile(
+  sessionId: string,
+  profileId: string
+): Promise<void> {
+  console.log(`[RedisSync] Migrating session ${sessionId.slice(0, 8)} likes to profile ${profileId.slice(0, 8)}`);
+
+  const redis = await ensureRedisReady();
+
+  try {
+    // Step 1: Get all posts liked by this session from Supabase
+    const { data: sessionLikes, error } = await supabase
+      .from("post_ratings")
+      .select("id, post_id")
+      .eq("session_id", sessionId);
+
+    if (error) {
+      console.error("[RedisSync] Failed to fetch session likes:", error);
+      return;
+    }
+
+    if (!sessionLikes || sessionLikes.length === 0) {
+      console.log("[RedisSync] No session likes to migrate");
+      return;
+    }
+
+    console.log(`[RedisSync] Found ${sessionLikes.length} session likes to migrate`);
+
+    // Step 2: Update each like in Supabase
+    for (const like of sessionLikes) {
+      // Check if profile already has this like
+      const { data: existingProfileLike } = await supabase
+        .from("post_ratings")
+        .select("id")
+        .eq("post_id", like.post_id)
+        .eq("profile_id", profileId)
+        .maybeSingle();
+
+      if (existingProfileLike) {
+        // Profile already has this like, delete the session one
+        await supabase
+          .from("post_ratings")
+          .delete()
+          .eq("id", like.id);
+      } else {
+        // Migrate: update session_id to null, set profile_id
+        await supabase
+          .from("post_ratings")
+          .update({
+            session_id: null,
+            profile_id: profileId,
+          })
+          .eq("id", like.id);
+      }
+    }
+
+    // Step 3: Update Redis sets
+    if (redis) {
+      const sessionLikesKey = counterKeys.sessionLikes(sessionId);
+      const profileLikesKey = counterKeys.profileLikes(profileId);
+      const sessionIdentifier = `session:${sessionId}`;
+      const profileIdentifier = `profile:${profileId}`;
+
+      for (const like of sessionLikes) {
+        const likedSetKey = counterKeys.postLiked(like.post_id);
+
+        // Remove session identifier, add profile identifier
+        await redis.srem(likedSetKey, sessionIdentifier);
+        await redis.sadd(likedSetKey, profileIdentifier);
+
+        // Move from session likes to profile likes
+        await redis.srem(sessionLikesKey, like.post_id);
+        await redis.sadd(profileLikesKey, like.post_id);
+      }
+    }
+
+    console.log(`[RedisSync] Migration complete: ${sessionLikes.length} likes migrated`);
+  } catch (error) {
+    console.error("[RedisSync] Migration failed:", error);
   }
 }

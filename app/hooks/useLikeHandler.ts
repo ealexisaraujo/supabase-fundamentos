@@ -60,6 +60,8 @@ interface PostLike {
 export interface UseLikeHandlerOptions<T extends PostLike = Post> {
   /** Session ID for the current user/session */
   sessionId: string;
+  /** Profile ID for authenticated users (optional) - enables persistent likes across devices */
+  profileId?: string;
   /** Query key to update in TanStack Query cache */
   queryKey: readonly unknown[];
   /** Callback to update posts state */
@@ -86,6 +88,7 @@ export interface UseLikeHandlerReturn {
  * ```tsx
  * const { handleLike, isLiking, isLikingRef } = useLikeHandler({
  *   sessionId,
+ *   profileId, // optional - for authenticated users
  *   queryKey: queryKeys.posts.liked(sessionId),
  *   setPosts,
  *   setSelectedPost, // optional
@@ -95,6 +98,7 @@ export interface UseLikeHandlerReturn {
  */
 export function useLikeHandler<T extends PostLike = Post>({
   sessionId,
+  profileId,
   queryKey,
   setPosts,
   setSelectedPost,
@@ -169,7 +173,7 @@ export function useLikeHandler<T extends PostLike = Post>({
 
       // Persist to Redis via server action (source of truth for counters)
       // Server action is needed for local Redis TCP (which only works server-side)
-      const result = await toggleLikeAction(postIdStr, sessionId);
+      const result = await toggleLikeAction(postIdStr, sessionId, profileId);
 
       // Remove from processing
       setIsLiking((prev) => {
@@ -220,7 +224,7 @@ export function useLikeHandler<T extends PostLike = Post>({
       } else {
         // Background sync to Supabase (fire-and-forget)
         // This updates Supabase for durability and triggers Realtime for other clients
-        syncLikeToSupabase(postIdStr, sessionId, result.isLiked, result.newCount)
+        syncLikeToSupabase(postIdStr, sessionId, result.isLiked, result.newCount, profileId)
           .catch(err => console.error("[useLikeHandler] Sync error:", err));
 
         // Update local state with the actual count from Redis
@@ -260,7 +264,7 @@ export function useLikeHandler<T extends PostLike = Post>({
         queryClient.setQueryData(globalCountsKey, finalUpdate);
       }
     },
-    [sessionId, queryKey, setPosts, setSelectedPost, likedMap, isLiking, queryClient]
+    [sessionId, profileId, queryKey, setPosts, setSelectedPost, likedMap, isLiking, queryClient]
   );
 
   return {

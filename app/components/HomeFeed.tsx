@@ -47,7 +47,7 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   useScrollRestoration({ key: "home-feed", dataLength: posts.length });
 
   // Auth state and sessionId from centralized provider
-  const { user, isLoading: isAuthLoading, signOut, sessionId } = useAuth();
+  const { user, isLoading: isAuthLoading, signOut, sessionId, profileId } = useAuth();
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -58,14 +58,14 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   // Redis is the source of truth for counters, ensuring consistency across views
   // IMPORTANT: Include posts.length in query key so it refetches when new posts load via infinite scroll
   const { data: redisData, isLoading: isLikedStatusLoading } = useQuery({
-    queryKey: [...queryKeys.posts.liked(sessionId), posts.length],
+    queryKey: [...queryKeys.posts.liked(sessionId), posts.length, profileId],
     queryFn: async () => {
       if (!sessionId || posts.length === 0) {
         return { countsMap: new Map<string, number>(), likedMap: new Map<string, boolean>() };
       }
 
       const postIds = posts.map(p => String(p.id));
-      return fetchCountsFromRedis(postIds, sessionId);
+      return fetchCountsFromRedis(postIds, sessionId, profileId);
     },
     enabled: !!sessionId && posts.length > 0,
     staleTime: 30 * 1000, // Consider fresh for 30 seconds
@@ -116,6 +116,7 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
   // Centralized like handling with optimistic updates
   const { handleLike, isLikingRef } = useLikeHandler({
     sessionId,
+    profileId,
     queryKey: queryKeys.posts.liked(sessionId),
     setPosts,
     likedMap,
@@ -149,7 +150,7 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
       let postsWithLikes = response.posts;
       if (postsWithLikes.length > 0) {
         const postIds = postsWithLikes.map((p) => String(p.id));
-        const { countsMap, likedMap } = await fetchCountsFromRedis(postIds, sessionId);
+        const { countsMap, likedMap } = await fetchCountsFromRedis(postIds, sessionId, profileId);
 
         postsWithLikes = postsWithLikes.map((post) => ({
           ...post,
@@ -176,7 +177,7 @@ export function HomeFeed({ initialPosts }: HomeFeedProps) {
     } finally {
       setLoadingMore(false);
     }
-  }, [sessionId]);
+  }, [sessionId, profileId]);
 
   // Note: Session initialization and liked status fetching is now handled by:
   // - sessionId: initialized with getSessionId() in useState

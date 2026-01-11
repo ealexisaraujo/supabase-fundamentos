@@ -36,10 +36,15 @@ export interface CountsAndLikedResultSerialized {
  *
  * Returns arrays instead of Maps because Maps don't serialize properly
  * in server action responses (they become empty objects {}).
+ *
+ * @param postIds - Array of post IDs to fetch counts for
+ * @param sessionId - Browser session ID
+ * @param profileId - User profile ID (optional, for authenticated users)
  */
 export async function fetchCountsFromRedisAction(
   postIds: string[],
-  sessionId: string
+  sessionId: string,
+  profileId?: string
 ): Promise<CountsAndLikedResultSerialized> {
   if (!sessionId || postIds.length === 0) {
     return {
@@ -49,9 +54,10 @@ export async function fetchCountsFromRedisAction(
   }
 
   // Fetch both counts and liked status in parallel
+  // Pass profileId to getLikedStatuses for persistent auth user likes
   const [countsMap, likedMap] = await Promise.all([
     getLikeCounts(postIds),
-    getLikedStatuses(postIds, sessionId),
+    getLikedStatuses(postIds, sessionId, profileId),
   ]);
 
   // Convert Maps to arrays for proper JSON serialization
@@ -67,12 +73,17 @@ export async function fetchCountsFromRedisAction(
  *
  * After a successful like/unlike, invalidates the posts cache
  * to ensure rank page and home page show fresh data.
+ *
+ * @param postId - The post to like/unlike
+ * @param sessionId - Browser session ID
+ * @param profileId - User profile ID (optional, for authenticated users)
  */
 export async function toggleLikeAction(
   postId: string,
-  sessionId: string
+  sessionId: string,
+  profileId?: string
 ): Promise<LikeResult> {
-  const result = await toggleLike(postId, sessionId);
+  const result = await toggleLike(postId, sessionId, profileId);
 
   // Invalidate cache after successful like/unlike
   // This ensures rank page and home page fetch fresh data

@@ -42,20 +42,20 @@ export function RankGrid({ initialPosts }: RankGridProps) {
   // Preserve scroll position across navigation
   useScrollRestoration({ key: "rank-grid", dataLength: posts.length });
 
-  // Get sessionId from centralized provider
-  const { sessionId } = useAuth();
+  // Get sessionId and profileId from centralized provider
+  const { sessionId, profileId } = useAuth();
 
   // Fetch counts and liked status from Redis with TanStack Query caching
   // Redis is the source of truth for counters, ensuring consistency across views
   const { data: redisData, isLoading: isLikedStatusLoading } = useQuery({
-    queryKey: queryKeys.posts.ranked(sessionId),
+    queryKey: [...queryKeys.posts.ranked(sessionId), profileId],
     queryFn: async () => {
       if (!sessionId || posts.length === 0) {
         return { countsMap: new Map<string, number>(), likedMap: new Map<string, boolean>() };
       }
 
       const postIds = posts.map(p => String(p.id));
-      return fetchCountsFromRedis(postIds, sessionId);
+      return fetchCountsFromRedis(postIds, sessionId, profileId);
     },
     enabled: !!sessionId && posts.length > 0,
     staleTime: 30 * 1000, // Consider fresh for 30 seconds
@@ -106,6 +106,7 @@ export function RankGrid({ initialPosts }: RankGridProps) {
   // Centralized like handling with optimistic updates
   const { handleLike, isLikingRef } = useLikeHandler({
     sessionId,
+    profileId,
     queryKey: queryKeys.posts.ranked(sessionId),
     setPosts,
     setSelectedPost,

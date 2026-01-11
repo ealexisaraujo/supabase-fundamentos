@@ -17,18 +17,28 @@ export default function BottomNav() {
   useEffect(() => {
     async function fetchProfile() {
       if (!user) {
+        console.log("[BottomNav] No user, clearing profile");
         setProfile(null);
         return;
       }
 
-      const { data } = await supabase
+      console.log("[BottomNav] Fetching profile for user:", user.id, user.email);
+      const { data, error } = await supabase
         .from("profiles")
         .select("username, avatar_url")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
+
+      if (error) {
+        console.error("[BottomNav] Error fetching profile:", error);
+      }
 
       if (data) {
+        console.log("[BottomNav] Profile found:", data);
         setProfile(data);
+      } else {
+        console.log("[BottomNav] No profile found for user");
+        setProfile(null);
       }
     }
 

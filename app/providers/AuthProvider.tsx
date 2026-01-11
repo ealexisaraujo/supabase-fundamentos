@@ -33,6 +33,8 @@ interface AuthContextType {
   user: User | null;
   /** Current session, null if not logged in */
   session: Session | null;
+  /** Profile ID from profiles table (for persistent likes) */
+  profileId: string | undefined;
   /** True while initial auth check is in progress */
   isLoading: boolean;
   /** Anonymous session ID for tracking likes without auth */
@@ -52,9 +54,40 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [profileId, setProfileId] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(true);
   // Initialize sessionId once - used for anonymous like tracking
   const [sessionId] = useState<string>(() => getSessionId());
+
+  // Helper to check if profile exists and return profileId
+  // In Supabase, profiles.id === auth.users.id (the profile ID is the user's auth ID)
+  const fetchProfileId = useCallback(async (userId: string): Promise<string | undefined> => {
+    console.log("[AuthProvider] Checking profile for user:", userId);
+    try {
+      // Check if profile exists (profiles.id = auth.users.id)
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle(); // Use maybeSingle to avoid error when no rows
+
+      if (error) {
+        console.error("[AuthProvider] Error fetching profile:", error);
+        return undefined;
+      }
+
+      if (!profile) {
+        console.log("[AuthProvider] Profile not found for user, may need to create one");
+        return undefined;
+      }
+
+      console.log("[AuthProvider] Profile found, profileId:", profile.id);
+      return profile.id;
+    } catch (error) {
+      console.error("[AuthProvider] Exception fetching profile:", error);
+      return undefined;
+    }
+  }, []);
 
   // Initialize auth state and set up listener
   useEffect(() => {
@@ -67,6 +100,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
+
+        // Fetch profile ID if user is authenticated
+        if (initialSession?.user?.id) {
+          const fetchedProfileId = await fetchProfileId(initialSession.user.id);
+          setProfileId(fetchedProfileId);
+        } else {
+          setProfileId(undefined);
+        }
       } catch (error) {
         console.error("[AuthProvider] Error getting initial session:", error);
       } finally {
@@ -79,19 +120,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Subscribe to auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log("[AuthProvider] Auth state changed:", event, "user:", newSession?.user?.email);
+
+      // Update user and session immediately
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
-      // Ensure loading is false after any auth event
-      setIsLoading((current) => (current ? false : current));
+      // Set loading to false IMMEDIATELY so UI can render
+      setIsLoading(false);
+
+      // Fetch profile ID if user is authenticated (async, UI updates when done)
+      if (newSession?.user?.id) {
+        fetchProfileId(newSession.user.id).then(fetchedProfileId => {
+          console.log("[AuthProvider] Setting profileId:", fetchedProfileId);
+          setProfileId(fetchedProfileId);
+        });
+      } else {
+        console.log("[AuthProvider] No user, clearing profileId");
+        setProfileId(undefined);
+      }
     });
 
     // Cleanup subscription on unmount
     return () => {
       subscription.unsubscribe();
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, [fetchProfileId]); // Include fetchProfileId in dependencies
 
   // Sign out function
   const signOut = useCallback(async () => {
@@ -118,9 +173,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, []);
 
+  // Debug: Log current auth state
+  useEffect(() => {
+    console.log("[AuthProvider] State:", {
+      user: user?.email,
+      profileId,
+      isLoading,
+      sessionId: sessionId.slice(0, 8)
+    });
+  }, [user, profileId, isLoading, sessionId]);
+
   const value: AuthContextType = {
     user,
     session,
+    profileId,
     isLoading,
     sessionId,
     signOut,

@@ -39,6 +39,8 @@ export {
   syncCounterFromDB,
   initializeCountersFromDB,
   counterKeys,
+  getLikeIdentifier,
+  getUserLikesKey,
   type LikeResult,
 } from "./counters";
 
@@ -47,4 +49,5 @@ export {
   syncLikeToSupabase,
   reconcileCounter,
   reconcileAllCounters,
+  migrateSessionLikesToProfile,
 } from "./sync";

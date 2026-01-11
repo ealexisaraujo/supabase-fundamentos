@@ -24,15 +24,48 @@ export interface LikeResult {
 
 /**
  * Key generators for counter-related Redis keys
+ *
+ * Identity Strategy:
+ * - Anonymous users: use session:{sessionId} as identifier
+ * - Authenticated users: use profile:{profileId} as identifier
+ * This ensures likes persist across sessions/devices for logged-in users.
  */
 export const counterKeys = {
   /** Like count per post */
   postLikes: (postId: string) => `post:likes:${postId}`,
-  /** Set of session IDs that liked a post */
+  /** Set of identifiers that liked a post (sessions and profiles) */
   postLiked: (postId: string) => `post:liked:${postId}`,
-  /** Set of post IDs liked by a session */
+  /** Set of post IDs liked by a session (anonymous users) */
   sessionLikes: (sessionId: string) => `session:likes:${sessionId}`,
+  /** Set of post IDs liked by a profile (authenticated users) */
+  profileLikes: (profileId: string) => `profile:likes:${profileId}`,
 };
+
+/**
+ * Get the appropriate identifier for likes based on auth status
+ * @param sessionId - Browser session ID (always present)
+ * @param profileId - User profile ID (only for authenticated users)
+ * @returns Prefixed identifier string
+ */
+export function getLikeIdentifier(sessionId: string, profileId?: string): string {
+  if (profileId) {
+    return `profile:${profileId}`;
+  }
+  return `session:${sessionId}`;
+}
+
+/**
+ * Get the appropriate likes key for a user
+ * @param sessionId - Browser session ID
+ * @param profileId - User profile ID (optional)
+ * @returns Redis key for the user's liked posts set
+ */
+export function getUserLikesKey(sessionId: string, profileId?: string): string {
+  if (profileId) {
+    return counterKeys.profileLikes(profileId);
+  }
+  return counterKeys.sessionLikes(sessionId);
+}
 
 /**
  * Toggle like for a post (atomic operation)
@@ -40,10 +73,20 @@ export const counterKeys = {
  *
  * This is the PRIMARY function for liking/unliking.
  * It uses atomic Redis operations to ensure consistency.
+ *
+ * Identity Strategy:
+ * - If profileId is provided (authenticated user), use profile:${profileId}
+ * - Otherwise, use session:${sessionId} (anonymous user)
+ * This ensures authenticated users' likes persist across devices.
+ *
+ * @param postId - The post to like/unlike
+ * @param sessionId - Browser session ID (always required)
+ * @param profileId - User profile ID (optional, for authenticated users)
  */
 export async function toggleLike(
   postId: string,
-  sessionId: string
+  sessionId: string,
+  profileId?: string
 ): Promise<LikeResult> {
   if (!sessionId) {
     return {
@@ -54,8 +97,12 @@ export async function toggleLike(
     };
   }
 
+  const identifier = getLikeIdentifier(sessionId, profileId);
+  const identifierType = profileId ? "profile" : "session";
+  const shortId = profileId ? profileId.slice(0, 8) : sessionId.slice(0, 8);
+
   console.log(
-    `[RedisCounter] Toggling like for post ${postId} by session ${sessionId.slice(0, 8)}...`
+    `[RedisCounter] Toggling like for post ${postId} by ${identifierType} ${shortId}...`
   );
 
   // Get Redis client (supports both Upstash and local Redis)
@@ -70,7 +117,7 @@ export async function toggleLike(
   try {
     const likeKey = counterKeys.postLikes(postId);
     const likedSetKey = counterKeys.postLiked(postId);
-    const sessionLikesKey = counterKeys.sessionLikes(sessionId);
+    const userLikesKey = getUserLikesKey(sessionId, profileId);
 
     // Check if counter exists in Redis, if not initialize from Supabase
     const existingCount = await redis.get<number>(likeKey);
@@ -86,8 +133,8 @@ export async function toggleLike(
       console.log(`[RedisCounter] Initialized counter to ${initialCount}`);
     }
 
-    // Check if session already liked this post
-    const isCurrentlyLiked = await redis.sismember(likedSetKey, sessionId);
+    // Check if user already liked this post (using prefixed identifier)
+    const isCurrentlyLiked = await redis.sismember(likedSetKey, identifier);
 
     let newCount: number;
     let isLiked: boolean;
@@ -95,15 +142,15 @@ export async function toggleLike(
     if (isCurrentlyLiked) {
       // Unlike: decrement count and remove from sets
       newCount = await redis.decr(likeKey);
-      await redis.srem(likedSetKey, sessionId);
-      await redis.srem(sessionLikesKey, postId);
+      await redis.srem(likedSetKey, identifier);
+      await redis.srem(userLikesKey, postId);
       isLiked = false;
       console.log(`[RedisCounter] Unlike successful, new count: ${newCount}`);
     } else {
       // Like: increment count and add to sets
       newCount = await redis.incr(likeKey);
-      await redis.sadd(likedSetKey, sessionId);
-      await redis.sadd(sessionLikesKey, postId);
+      await redis.sadd(likedSetKey, identifier);
+      await redis.sadd(userLikesKey, postId);
       isLiked = true;
       console.log(`[RedisCounter] Like successful, new count: ${newCount}`);
     }
@@ -335,24 +382,38 @@ async function syncMissingCounters(
 }
 
 /**
- * Check if session liked a post
+ * Check if user liked a post
+ *
+ * @param postId - The post to check
+ * @param sessionId - Browser session ID
+ * @param profileId - User profile ID (optional, for authenticated users)
  */
 export async function isLikedBySession(
   postId: string,
-  sessionId: string
+  sessionId: string,
+  profileId?: string
 ): Promise<boolean> {
   if (!sessionId) return false;
 
+  const identifier = getLikeIdentifier(sessionId, profileId);
   const redis = await ensureRedisReady();
 
   if (!redis) {
-    // Fallback to Supabase
-    const { data, error } = await supabase
+    // Fallback to Supabase - check both session_id and profile_id
+    let query = supabase
       .from("post_ratings")
       .select("post_id")
-      .eq("post_id", postId)
-      .eq("session_id", sessionId)
-      .maybeSingle();
+      .eq("post_id", postId);
+
+    if (profileId) {
+      // For authenticated users, check profile_id
+      query = query.eq("profile_id", profileId);
+    } else {
+      // For anonymous users, check session_id
+      query = query.eq("session_id", sessionId);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error) {
       console.error("[RedisCounter] Supabase fallback error:", error);
@@ -364,7 +425,7 @@ export async function isLikedBySession(
 
   try {
     const likedSetKey = counterKeys.postLiked(postId);
-    const isLiked = await redis.sismember(likedSetKey, sessionId);
+    const isLiked = await redis.sismember(likedSetKey, identifier);
     return Boolean(isLiked);
   } catch (error) {
     console.error("[RedisCounter] Error checking liked status:", error);
@@ -374,10 +435,15 @@ export async function isLikedBySession(
 
 /**
  * Get liked status for multiple posts (batch)
+ *
+ * @param postIds - Array of post IDs to check
+ * @param sessionId - Browser session ID
+ * @param profileId - User profile ID (optional, for authenticated users)
  */
 export async function getLikedStatuses(
   postIds: string[],
-  sessionId: string
+  sessionId: string,
+  profileId?: string
 ): Promise<Map<string, boolean>> {
   const likedMap = new Map<string, boolean>();
 
@@ -386,16 +452,27 @@ export async function getLikedStatuses(
     return likedMap;
   }
 
+  const identifier = getLikeIdentifier(sessionId, profileId);
   const redis = await ensureRedisReady();
 
   if (!redis) {
-    // Fallback to Supabase
+    // Fallback to Supabase - query based on auth status
     console.log("[RedisCounter] Using Supabase fallback for batch liked status");
-    const { data, error } = await supabase
+
+    let query = supabase
       .from("post_ratings")
       .select("post_id")
-      .eq("session_id", sessionId)
       .in("post_id", postIds);
+
+    if (profileId) {
+      // For authenticated users, check profile_id
+      query = query.eq("profile_id", profileId);
+    } else {
+      // For anonymous users, check session_id
+      query = query.eq("session_id", sessionId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("[RedisCounter] Supabase batch fallback error:", error);
@@ -415,13 +492,13 @@ export async function getLikedStatuses(
   }
 
   try {
-    // Check each post's liked set for the session
+    // Check each post's liked set for the identifier
     // Using pipeline would be more efficient but Upstash doesn't support it directly
     // For now, we'll use Promise.all
     const checks = await Promise.all(
       postIds.map(async (postId) => {
         const likedSetKey = counterKeys.postLiked(postId);
-        const isLiked = await redis.sismember(likedSetKey, sessionId);
+        const isLiked = await redis.sismember(likedSetKey, identifier);
         return { postId, isLiked: Boolean(isLiked) };
       })
     );
@@ -434,11 +511,18 @@ export async function getLikedStatuses(
   } catch (error) {
     console.error("[RedisCounter] Error getting batch liked status:", error);
     // Fallback to Supabase
-    const { data } = await supabase
+    let query = supabase
       .from("post_ratings")
       .select("post_id")
-      .eq("session_id", sessionId)
       .in("post_id", postIds);
+
+    if (profileId) {
+      query = query.eq("profile_id", profileId);
+    } else {
+      query = query.eq("session_id", sessionId);
+    }
+
+    const { data } = await query;
 
     postIds.forEach((id) => likedMap.set(id, false));
     data?.forEach((rating) => {

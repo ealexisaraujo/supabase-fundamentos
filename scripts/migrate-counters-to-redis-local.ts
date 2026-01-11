@@ -45,6 +45,7 @@ const counterKeys = {
   postLikes: (postId: string) => `post:likes:${postId}`,
   postLiked: (postId: string) => `post:liked:${postId}`,
   sessionLikes: (sessionId: string) => `session:likes:${sessionId}`,
+  profileLikes: (profileId: string) => `profile:likes:${profileId}`,
 };
 
 async function migrateCountersToRedis() {
@@ -86,12 +87,12 @@ async function migrateCountersToRedis() {
       console.log(`   ✅ Migrated ${migratedPosts} post counters`);
     }
 
-    // Step 2: Migrate liked sets
+    // Step 2: Migrate liked sets (supporting both session_id and profile_id)
     console.log("\n👍 Step 2: Migrating liked sets...");
 
     const { data: ratings, error: ratingsError } = await supabase
       .from("post_ratings")
-      .select("post_id, session_id");
+      .select("post_id, session_id, profile_id");
 
     if (ratingsError) {
       console.error("❌ Failed to fetch ratings:", ratingsError);
@@ -101,16 +102,30 @@ async function migrateCountersToRedis() {
     if (!ratings || ratings.length === 0) {
       console.log("   No ratings found in database.");
     } else {
-      let migratedRatings = 0;
+      let sessionLikes = 0;
+      let profileLikes = 0;
+
       for (const rating of ratings) {
         const likedSetKey = counterKeys.postLiked(rating.post_id);
-        const sessionLikesKey = counterKeys.sessionLikes(rating.session_id);
 
-        await redis.sAdd(likedSetKey, rating.session_id);
-        await redis.sAdd(sessionLikesKey, rating.post_id);
-        migratedRatings++;
+        if (rating.profile_id) {
+          // Profile-based like (authenticated user)
+          const identifier = `profile:${rating.profile_id}`;
+          const profileLikesKey = counterKeys.profileLikes(rating.profile_id);
+          await redis.sAdd(likedSetKey, identifier);
+          await redis.sAdd(profileLikesKey, rating.post_id);
+          profileLikes++;
+        } else if (rating.session_id) {
+          // Session-based like (anonymous user)
+          const identifier = `session:${rating.session_id}`;
+          const sessionLikesKey = counterKeys.sessionLikes(rating.session_id);
+          await redis.sAdd(likedSetKey, identifier);
+          await redis.sAdd(sessionLikesKey, rating.post_id);
+          sessionLikes++;
+        }
       }
-      console.log(`   ✅ Migrated ${migratedRatings} rating records`);
+      console.log(`   ✅ Migrated ${sessionLikes} session-based likes`);
+      console.log(`   ✅ Migrated ${profileLikes} profile-based likes`);
     }
 
     // Step 3: Verify migration
@@ -154,6 +169,9 @@ async function migrateCountersToRedis() {
 
     const sessionKeys = await redis.keys("session:likes:*");
     console.log(`   Total session:likes:* keys: ${sessionKeys.length}`);
+
+    const profileKeys = await redis.keys("profile:likes:*");
+    console.log(`   Total profile:likes:* keys: ${profileKeys.length}`);
 
     // Final summary
     console.log("\n" + "=".repeat(50));
