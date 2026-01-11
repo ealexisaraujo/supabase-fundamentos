@@ -42,6 +42,9 @@ npm run lint         # Run ESLint
 - `rank/page.tsx` - Ranking page Server Component (fetches cached ranked posts)
 - `auth/login/` - Login page
 - `auth/register/` - Registration page
+- `auth/forgot-password/` - Password reset request page
+- `auth/reset-password/` - New password entry page (requires valid session from email link)
+- `auth/callback/route.ts` - Auth callback handler for email links (exchanges code for session)
 - `profile/[username]/` - User profile pages with posts wall
 - `profile/[username]/ProfileWall.tsx` - Grid display of user's posts
 - `profile/create/` - Profile setup for new users
@@ -164,10 +167,39 @@ NEXT_PUBLIC_SUPABASE_URL=<your-supabase-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 NEXT_PUBLIC_USE_MOCKS=true|false  # Optional: toggle mock data
 
+# Production site URL (required for password reset emails)
+NEXT_PUBLIC_SITE_URL=<your-production-url>  # e.g., https://myapp.vercel.app
+
 # Upstash Redis (optional - falls back to unstable_cache if not configured)
 UPSTASH_REDIS_REST_URL=<your-upstash-url>
 UPSTASH_REDIS_REST_TOKEN=<your-upstash-token>
 ```
+
+## Password Reset Flow
+
+The app implements a complete password reset flow using Supabase Auth:
+
+```
+User Request → Supabase Email → Callback Route → Reset Password Page
+```
+
+**Flow:**
+1. User enters email on `/auth/forgot-password`
+2. `resetPasswordForEmail()` sends email with unique, expiring link
+3. User clicks link → redirected to `/auth/callback?code=...&next=/auth/reset-password`
+4. Callback exchanges code for session via `exchangeCodeForSession()`
+5. User enters new password on `/auth/reset-password`
+6. `updateUser({ password })` updates the password
+
+**Supabase Dashboard Configuration:**
+1. Go to **Authentication > URL Configuration**
+2. Set **Site URL** to your production URL (e.g., `https://myapp.vercel.app`)
+3. Add redirect URLs to **Redirect URLs** whitelist:
+   - `https://myapp.vercel.app/auth/callback`
+   - `http://localhost:3000/auth/callback` (for local development)
+
+**Vercel Configuration:**
+Set `NEXT_PUBLIC_SITE_URL` environment variable to your production domain.
 
 ## Supabase Local Development
 
@@ -197,6 +229,7 @@ npx vitest run tests/comments.test.ts
 - Next.js `unstable_cache` for server-side data caching
 
 ## Recent Changes
+- 010-forgot-password-flow: Implemented complete password reset flow with Supabase Auth. Added `/auth/forgot-password` (request reset), `/auth/callback` (exchange code for session), `/auth/reset-password` (set new password). Uses `NEXT_PUBLIC_SITE_URL` env var for production redirect URLs. Added "Forgot password?" link to login page. Includes comprehensive test coverage (47 tests).
 - 009-dual-identity-likes: Implemented dual identity system for likes. Anonymous users use `session_id` (browser-bound), authenticated users use `profile_id` (persistent across devices). Updated Redis key schema to use prefixed identifiers (`session:{id}` vs `profile:{id}`). AuthProvider now exposes `profileId` and `profile` data. Updated `post_ratings` table with `profile_id` column and partial unique index.
 - 008-comment-count-caching: Fixed comment count flashing from 0 to actual count during navigation. Added `comments_count` to Post interface. Updated `cached-posts.ts` and `posts.ts` to include `comments(count)` in Supabase queries. PostCard now passes `initialCommentCount` to CommentsSection. Comment counts now come from server cache instead of client-side fetch.
 - 007-authenticated-comments: Implemented authenticated comments with profile linking. Added `profile_id` FK to comments table. Updated RLS policy to require authentication for INSERT. Comments now display username with link to profile. Anonymous users see "Login to add a comment" prompt. Made `username` nullable in profiles to support registration flow where users set username after signup.
