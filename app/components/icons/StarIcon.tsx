@@ -4,13 +4,16 @@ interface StarIconProps {
 }
 
 export function StarIcon({ filled = false, className = "w-6 h-6" }: StarIconProps) {
+  // Check if className contains a text color override
+  const hasColorOverride = className.includes('text-');
+
   if (filled) {
     return (
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
         fill="currentColor"
-        className={`${className} text-amber-500`}
+        className={hasColorOverride ? className : `${className} text-amber-500`}
       >
         <path
           fillRule="evenodd"

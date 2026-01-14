@@ -15,7 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ProfilePost } from "../../utils/cached-profiles";
 import type { Post } from "../../mocks/posts";
 import { PostModal } from "../../components/PostModal";
-import { HeartIcon, GridIcon, PlusIcon, PinIcon } from "../../components/icons";
+import { HeartIcon, GridIcon, PlusIcon, StarIcon } from "../../components/icons";
 import { queryKeys, useAuth } from "../../providers";
 import { fetchCountsFromRedis } from "../../utils/posts-with-counts";
 import { useLikeHandler, usePostLikesSubscription } from "../../hooks";
@@ -203,8 +203,8 @@ export default function ProfileWall({
 
               {/* Highlighted badge (always visible if highlighted) */}
               {isHighlighted && (
-                <div className="absolute top-1 right-1 w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-sm">
-                  <PinIcon filled className="w-3 h-3" />
+                <div className="absolute top-1 right-1 w-6 h-6 rounded-full bg-amber-500/90 flex items-center justify-center shadow-md backdrop-blur-sm">
+                  <StarIcon filled className="w-3.5 h-3.5 text-white" />
                 </div>
               )}
 
@@ -216,14 +216,14 @@ export default function ProfileWall({
                 </div>
               </div>
 
-              {/* Pin button - always visible on mobile for owner */}
+              {/* Star button - always visible on mobile for owner */}
               {canPin && (
                 <button
                   onClick={(e) => handlePinClick(e, post.id)}
-                  className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-amber-500/90 text-white flex items-center justify-center active:bg-amber-600 transition-all shadow-lg z-10"
+                  className="absolute bottom-1 right-1 w-7 h-7 rounded-full bg-amber-500/90 hover:bg-amber-500 text-white flex items-center justify-center active:bg-amber-600 active:scale-95 transition-all shadow-lg z-10"
                   aria-label="Agregar a destacados"
                 >
-                  <PinIcon className="w-3.5 h-3.5" />
+                  <StarIcon className="w-4 h-4" />
                 </button>
               )}
             </div>
