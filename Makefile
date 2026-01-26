@@ -8,10 +8,10 @@
 #   make status    - Check status of all services
 
 .PHONY: help up down status logs clean setup \
-        supabase-up supabase-down supabase-status supabase-reset \
-        redis-up redis-down redis-status redis-logs redis-cli redis-flush redis-migrate redis-verify \
+        supabase-up supabase-down supabase-status supabase-reset supabase-clean supabase-link \
+        redis-up redis-down redis-status redis-logs redis-cli redis-flush redis-migrate redis-verify redis-pull \
         prod-verify prod-migrate \
-        dev build test
+        images-update dev build test
 
 # Default target
 .DEFAULT_GOAL := help
@@ -125,6 +125,28 @@ supabase-down: ## Stop Supabase services
 supabase-status: ## Show Supabase status
 	@supabase status
 
+supabase-clean: ## Remove stale Supabase containers for this project
+	@PROJECT_ID=$$(awk -F\" '/^project_id/ {print $$2}' supabase/config.toml); \
+	if [ -z "$$PROJECT_ID" ]; then \
+		echo "$(RED)Could not determine project_id from supabase/config.toml$(RESET)"; \
+		exit 1; \
+	fi; \
+	CONTAINERS=$$(docker ps -a --format '{{.Names}}' | grep -E "^supabase_.*_$${PROJECT_ID}$$" || true); \
+	if [ -n "$$CONTAINERS" ]; then \
+		echo "$(YELLOW)Removing stale Supabase containers for $$PROJECT_ID...$(RESET)"; \
+		echo "$$CONTAINERS" | xargs -r docker rm -f; \
+	else \
+		echo "$(GREEN)No stale Supabase containers found for $$PROJECT_ID.$(RESET)"; \
+	fi
+
+supabase-link: ## Sync local Supabase service versions with linked project
+	@PROJECT_REF=$$(cat supabase/.temp/project-ref 2>/dev/null); \
+	if [ -z "$$PROJECT_REF" ]; then \
+		echo "$(RED)No project ref found in supabase/.temp/project-ref$(RESET)"; \
+		exit 1; \
+	fi; \
+	supabase link --project-ref $$PROJECT_REF
+
 supabase-reset: ## Reset Supabase database (runs migrations + seeds)
 	@echo "$(YELLOW)Resetting Supabase database...$(RESET)"
 	@supabase db reset
@@ -190,6 +212,9 @@ redis-verify: ## Verify Redis data matches Supabase
 	@psql postgresql://postgres:postgres@localhost:54322/postgres -t -c "SELECT COUNT(*) FROM post_ratings;" 2>/dev/null | xargs -I {} echo "  {} ratings in Supabase"
 	@echo ""
 
+redis-pull: ## Pull latest Redis images
+	@docker compose pull
+
 #---------------------------------------------------------------------------
 # PRODUCTION (Upstash + Supabase Cloud)
 #---------------------------------------------------------------------------
@@ -221,6 +246,14 @@ test-watch: ## Run tests in watch mode
 
 lint: ## Run linter
 	@npm run lint
+
+#---------------------------------------------------------------------------
+# IMAGES
+#---------------------------------------------------------------------------
+
+images-update: redis-pull ## Pull latest images for local services
+	@echo "$(GREEN)Local images updated (Redis).$(RESET)"
+	@echo "$(YELLOW)To sync Supabase service versions with the linked project, run: make supabase-link$(RESET)"
 
 #---------------------------------------------------------------------------
 # QUICK CHECKS

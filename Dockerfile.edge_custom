@@ -1,4 +1,5 @@
-FROM public.ecr.aws/supabase/edge-runtime:v1.69.28
+ARG EDGE_RUNTIME_VERSION=v1.69.28
+FROM public.ecr.aws/supabase/edge-runtime:${EDGE_RUNTIME_VERSION}
 
 USER root
 
